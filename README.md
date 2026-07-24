@@ -14,7 +14,7 @@ beyond Composer. It also reads and writes
 so it slots into tools that already emit that format, and it handles cycles and
 self-loops too.
 
-![php-dag rendering a CI/CD pipeline as text](.github/demo.gif)
+![php-dag rendering a dependency graph and a left-to-right workflow as text](.github/demo.gif)
 
 Already have a DOT file from another tool? Render it straight to text:
 

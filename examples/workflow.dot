@@ -1,0 +1,8 @@
+digraph {
+    rankdir=LR;
+    "Submit"  -> "Review";
+    "Review"  -> "Approve" [label="yes"];
+    "Review"  -> "Reject"  [label="no"];
+    "Approve" -> "Publish";
+    "Reject"  -> "Submit"  [label="retry"];
+}

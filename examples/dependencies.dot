@@ -1,0 +1,7 @@
+digraph {
+    "my/app" -> "symfony/console"  [label="^7.0"];
+    "my/app" -> "monolog/monolog"  [label="^3.5"];
+    "my/app" -> "psr/log"          [label="^3.0"];
+    "symfony/console" -> "psr/log" [label="^3.0"];
+    "monolog/monolog" -> "psr/log" [label="^3.0"];
+}
