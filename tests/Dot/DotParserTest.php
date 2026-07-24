@@ -727,6 +727,23 @@ final class DotParserTest extends TestCase
     }
 
     #[Test]
+    public function rejectsTokensAfterClosingBrace(): void
+    {
+        $this->expectException(DotSyntaxException::class);
+        $this->expectExceptionMessage('Unexpected token "trailing" after end of graph');
+
+        (new DotParser())->parse('digraph { a; } trailing');
+    }
+
+    #[Test]
+    public function rejectsASecondGraphAfterTheFirst(): void
+    {
+        $this->expectException(DotSyntaxException::class);
+
+        (new DotParser())->parse('digraph { a; } digraph { b; }');
+    }
+
+    #[Test]
     public function nodeBelongsToTheClusterThatFirstDefinedIt(): void
     {
         $graph = (new DotParser())->parse(<<<'DOT'

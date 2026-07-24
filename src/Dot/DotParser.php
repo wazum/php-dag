@@ -92,6 +92,12 @@ final class DotParser
             /** @infection-ignore-all removing the call leaves the token stream stuck before '}', so the loop spins forever; only the process timeout can detect it */
             $this->parseStatement();
         }
+        $this->expectSymbol('}');
+
+        $trailing = $this->tokens[$this->position] ?? null;
+        if (null !== $trailing) {
+            throw $this->syntaxError(sprintf('Unexpected token "%s" after end of graph', ControlCharacters::escape($trailing['value'])), $trailing['offset']);
+        }
 
         return $this->buildGraph();
     }
