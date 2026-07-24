@@ -8,6 +8,7 @@ use PhpDag\Dot\DotExporter;
 use PhpDag\Dot\DotParser;
 use PhpDag\Graph\Edge;
 use PhpDag\Graph\Graph;
+use PhpDag\Graph\Group;
 use PhpDag\Graph\Label;
 use PhpDag\Graph\Node;
 use PhpDag\Style\EdgeStrokeStyle;
@@ -101,6 +102,49 @@ final class DotExporterTest extends TestCase
 
         self::assertSame('literal\n', $reparsed->getNode('a')->title);
         self::assertSame(['second line'], $reparsed->getNode('a')->body);
+    }
+
+    #[Test]
+    public function declaresGroupMembersInsideAClusterSubgraph(): void
+    {
+        $graph = new Graph();
+        $graph->addNode(new Node('a', 'A'))
+            ->addNode(new Node('b', 'B'))
+            ->addEdge(new Edge('a', 'b'))
+            ->addGroup(new Group('direct', 'Direct', ['a']));
+
+        $dot = (new DotExporter())->export($graph);
+
+        $expected = <<<'DOT'
+        digraph {
+            subgraph "cluster_direct" {
+                label="Direct";
+                "a" [label="A"];
+            }
+            "b" [label="B"];
+            "a" -> "b";
+        }
+        DOT;
+
+        self::assertSame($expected, $dot);
+    }
+
+    #[Test]
+    public function exportsAndRoundTripsGroups(): void
+    {
+        $graph = new Graph();
+        $graph->addNode(new Node('a', 'A'))
+            ->addNode(new Node('b', 'B'))
+            ->addNode(new Node('c', 'C'))
+            ->addEdge(new Edge('a', 'b'))
+            ->addEdge(new Edge('b', 'c'))
+            ->addGroup(new Group('cluster_direct', 'Direct dependencies', ['a', 'b']));
+
+        $reparsed = (new DotParser())->parse((new DotExporter())->export($graph));
+
+        self::assertCount(1, $reparsed->groups());
+        self::assertSame('Direct dependencies', $reparsed->groups()[0]->label);
+        self::assertSame(['a', 'b'], $reparsed->groups()[0]->nodeIds);
     }
 
     #[Test]
