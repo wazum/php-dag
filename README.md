@@ -6,8 +6,10 @@
 [![CI](https://github.com/wazum/php-dag/actions/workflows/ci.yml/badge.svg)](https://github.com/wazum/php-dag/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Render directed acyclic graphs (DAGs) as ASCII art using the Sugiyama algorithm.
-Cyclic graphs and self-loops work too.
+**Render directed acyclic graphs as ASCII/Unicode art in pure PHP — no Graphviz
+binary, no system dependencies.** It reads and writes Graphviz DOT, ships a
+`php-dag` CLI, and handles cycles and self-loops too, using the Sugiyama layered
+algorithm.
 
 ```
      ╭──────╮
@@ -25,6 +27,12 @@ Cyclic graphs and self-loops work too.
      ╭───┴──╮
      │ Sink │
      ╰──────╯
+```
+
+Already generating DOT with another tool? Pipe it straight in — no Graphviz install required:
+
+```bash
+terraform graph | php-dag --direction=lr
 ```
 
 ## Requirements
