@@ -744,6 +744,26 @@ final class DotParserTest extends TestCase
     }
 
     #[Test]
+    public function topLevelGroupIdAttributeIsAGraphAttributeNotAnOverride(): void
+    {
+        // The phpdag_id override only applies inside a cluster; at the top level
+        // it is just another graph attribute and must not rewrite any group id.
+        $parser = new DotParser();
+        $graph = $parser->parse('digraph { phpdag_id="x"; subgraph cluster_a { a; } }');
+
+        self::assertSame('x', $parser->graphAttributes()['phpdag_id']);
+        self::assertSame('cluster_a', $graph->groups()[0]->id);
+    }
+
+    #[Test]
+    public function clusterGroupIdAttributeOverridesTheClusterNameAsGroupId(): void
+    {
+        $graph = (new DotParser())->parse('digraph { subgraph cluster_0 { phpdag_id="direct"; a; } }');
+
+        self::assertSame('direct', $graph->groups()[0]->id);
+    }
+
+    #[Test]
     public function nodeBelongsToTheClusterThatFirstDefinedIt(): void
     {
         $graph = (new DotParser())->parse(<<<'DOT'

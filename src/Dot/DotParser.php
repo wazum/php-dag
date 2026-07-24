@@ -51,6 +51,9 @@ final class DotParser
     /** @var array<string, list<string>> cluster id => member node ids */
     private array $groupMembers = [];
 
+    /** @var array<string, string> cluster name => original group id carried by DotExporter::GROUP_ID_ATTRIBUTE */
+    private array $groupIdOverrides = [];
+
     /** @var array<string, true> node id => already assigned to a cluster */
     private array $assignedNodes = [];
 
@@ -71,6 +74,7 @@ final class DotParser
         $this->groupOrder = [];
         $this->groupLabels = [];
         $this->groupMembers = [];
+        $this->groupIdOverrides = [];
         $this->assignedNodes = [];
         $this->clusterStack = [];
         $this->strict = false;
@@ -152,10 +156,13 @@ final class DotParser
             $this->advance();
             $value = $this->advanceIdentifier();
             $openCluster = end($this->clusterStack);
-            if (false !== $openCluster && 'label' === strtolower($identifier)) {
+            $lowerIdentifier = strtolower($identifier);
+            if (false !== $openCluster && 'label' === $lowerIdentifier) {
                 $this->groupLabels[$openCluster] = $value;
+            } elseif (false !== $openCluster && DotExporter::GROUP_ID_ATTRIBUTE === $lowerIdentifier) {
+                $this->groupIdOverrides[$openCluster] = $value;
             } else {
-                $this->graphAttributes[strtolower($identifier)] = $value;
+                $this->graphAttributes[$lowerIdentifier] = $value;
             }
         } elseif ($this->peekIsSymbol('[') && in_array(strtolower($identifier), ['graph', 'node', 'edge'], true)) {
             $this->applyDefaultAttributes(strtolower($identifier), $this->parseOptionalAttributes());
@@ -327,7 +334,10 @@ final class DotParser
             if ([] === $members) {
                 continue;
             }
-            $graph->addGroup(new Group($groupId, ControlCharacters::strip($this->groupLabels[$groupId]), $members));
+            $id = isset($this->groupIdOverrides[$groupId])
+                ? ControlCharacters::strip($this->groupIdOverrides[$groupId])
+                : $groupId;
+            $graph->addGroup(new Group($id, ControlCharacters::strip($this->groupLabels[$groupId]), $members));
         }
 
         return $graph;

@@ -117,7 +117,8 @@ final class DotExporterTest extends TestCase
 
         $expected = <<<'DOT'
         digraph {
-            subgraph "cluster_direct" {
+            subgraph "cluster_0" {
+                phpdag_id="direct";
                 label="Direct";
                 "a" [label="A"];
             }
@@ -145,6 +146,37 @@ final class DotExporterTest extends TestCase
         self::assertCount(1, $reparsed->groups());
         self::assertSame('Direct dependencies', $reparsed->groups()[0]->label);
         self::assertSame(['a', 'b'], $reparsed->groups()[0]->nodeIds);
+    }
+
+    #[Test]
+    public function roundTripPreservesTheOriginalGroupId(): void
+    {
+        $graph = new Graph();
+        $graph->addNode(new Node('a', 'A'))
+            ->addNode(new Node('b', 'B'))
+            ->addEdge(new Edge('a', 'b'))
+            ->addGroup(new Group('direct', 'Direct', ['a', 'b']));
+
+        $reparsed = (new DotParser())->parse((new DotExporter())->export($graph));
+
+        self::assertSame('direct', $reparsed->groups()[0]->id);
+    }
+
+    #[Test]
+    public function roundTripKeepsGroupsWhoseIdsWouldCollideUnderClusterPrefixing(): void
+    {
+        // 'foo' and 'cluster_foo' both collapse to the cluster name "cluster_foo"
+        // under naive prefixing and reparse as one merged group. They must stay
+        // two distinct groups with their original ids.
+        $graph = new Graph();
+        $graph->addNode(new Node('a', 'A'))
+            ->addNode(new Node('b', 'B'))
+            ->addGroup(new Group('foo', 'Foo', ['a']))
+            ->addGroup(new Group('cluster_foo', 'Cluster Foo', ['b']));
+
+        $reparsed = (new DotParser())->parse((new DotExporter())->export($graph));
+
+        self::assertSame(['foo', 'cluster_foo'], array_map(static fn ($group) => $group->id, $reparsed->groups()));
     }
 
     #[Test]

@@ -10,6 +10,14 @@ use PhpDag\Style\EdgeStrokeStyle;
 
 final readonly class DotExporter
 {
+    /**
+     * Carries a group's original id through the round trip. Cluster names are
+     * indexed (cluster_0, cluster_1, …) to stay Graphviz clusters and never
+     * collide, so the real id — which may or may not start with "cluster" —
+     * rides along in this private attribute for the parser to restore.
+     */
+    public const GROUP_ID_ATTRIBUTE = 'phpdag_id';
+
     public function export(Graph $graph): string
     {
         $lines = ['digraph {'];
@@ -17,8 +25,9 @@ final readonly class DotExporter
         // Cluster members must be declared inside their subgraph before any edge
         // references them, so the parser assigns membership to the right cluster.
         $emitted = [];
-        foreach ($graph->groups() as $group) {
-            $lines[] = sprintf('    subgraph %s {', $this->quote($this->clusterName($group->id)));
+        foreach ($graph->groups() as $index => $group) {
+            $lines[] = sprintf('    subgraph "cluster_%d" {', $index);
+            $lines[] = sprintf('        %s=%s;', self::GROUP_ID_ATTRIBUTE, $this->quote($group->id));
             $lines[] = sprintf('        label=%s;', $this->quote($group->label));
             foreach ($group->nodeIds as $nodeId) {
                 if (isset($emitted[$nodeId])) {
@@ -68,12 +77,6 @@ final readonly class DotExporter
         $label = implode('\n', array_map($this->escape(...), [$node->title, ...$node->body]));
 
         return sprintf('    %s [label="%s"];', $this->quote($node->id), $label);
-    }
-
-    /** Prefix ids that aren't already Graphviz clusters so the parser treats the subgraph as a group. */
-    private function clusterName(string $groupId): string
-    {
-        return str_starts_with($groupId, 'cluster') ? $groupId : 'cluster_'.$groupId;
     }
 
     private function quote(string $value): string
