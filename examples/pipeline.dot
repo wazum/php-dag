@@ -1,0 +1,10 @@
+digraph {
+    "Checkout" -> "Install";
+    "Install" -> "Lint";
+    "Install" -> "Unit tests";
+    "Install" -> "E2E tests";
+    "Lint" -> "Build";
+    "Unit tests" -> "Build";
+    "E2E tests" -> "Build";
+    "Build" -> "Deploy";
+}
