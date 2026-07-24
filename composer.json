@@ -1,6 +1,6 @@
 {
     "name": "wazum/php-dag",
-    "description": "Render directed acyclic graphs as ASCII/Unicode art in pure PHP — no Graphviz binary needed. Reads and writes DOT and ships a CLI.",
+    "description": "Render directed acyclic graphs (DAGs) as ASCII/Unicode art in pure PHP — pipelines, workflows and dependency trees drawn in your terminal, logs or Markdown. Reads and writes DOT; ships a CLI.",
     "type": "library",
     "license": "MIT",
     "keywords": [

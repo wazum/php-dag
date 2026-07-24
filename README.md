@@ -6,10 +6,13 @@
 [![CI](https://github.com/wazum/php-dag/actions/workflows/ci.yml/badge.svg)](https://github.com/wazum/php-dag/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**Render directed acyclic graphs as ASCII/Unicode art in pure PHP — no Graphviz
-binary, no system dependencies.** It reads and writes Graphviz DOT, ships a
-`php-dag` CLI, and handles cycles and self-loops too, using the Sugiyama layered
-algorithm.
+**Render directed acyclic graphs (DAGs) as ASCII/Unicode art in pure PHP** —
+pipelines, workflows, dependency trees and state machines drawn right in your
+terminal, CI logs, or Markdown. No image files to open, nothing to install
+beyond Composer. It also reads and writes
+[Graphviz DOT](https://en.wikipedia.org/wiki/DOT_%28graph_description_language%29),
+so it slots into tools that already emit that format, and it handles cycles and
+self-loops too.
 
 ```
      ╭──────╮
@@ -29,7 +32,7 @@ algorithm.
      ╰──────╯
 ```
 
-Already generating DOT with another tool? Pipe it straight in — no Graphviz install required:
+Already have a DOT file from another tool? Render it straight to text:
 
 ```bash
 terraform graph | php-dag --direction=lr
