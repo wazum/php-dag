@@ -413,6 +413,14 @@ grammar](https://graphviz.org/doc/info/lang.html), not a full implementation:
 subgraphs used as edge endpoints (`{a b} -> c`) and quoted-string concatenation
 with `+` are not supported.
 
+`toDot()` is a Graphviz **visualization export**, not a full serializer. Node
+titles and multi-line content, edges, edge labels, edge stroke styles, and
+groups (including their ids and labels) round-trip through
+`toDot()`/`fromDot()`. Presentation and layout hints that DOT export does not
+carry — ANSI colors, node styles, edge weights, `minLength`, badges, and label
+positions — are dropped. Use it to hand a graph to Graphviz or another DOT
+tool, not as a save/load format.
+
 ### Command Line
 
 The package ships a `php-dag` binary. It reads a DOT file, or DOT from stdin:

@@ -359,6 +359,13 @@ final class Graph
         return (new DotParser())->parse($dot);
     }
 
+    /**
+     * Exports the graph as Graphviz DOT for visualization or interchange — not a
+     * lossless serializer. Nodes, edges, edge labels, edge stroke styles, and
+     * groups (with their ids and labels) round-trip through fromDot(); colors,
+     * node styles, edge weights, minLength, badges, and label positions are not
+     * carried by the export and are dropped.
+     */
     public function toDot(): string
     {
         return (new DotExporter())->export($this);
