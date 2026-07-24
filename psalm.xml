@@ -11,6 +11,7 @@
 >
     <projectFiles>
         <directory name="src"/>
+        <file name="bin/php-dag"/>
         <ignoreFiles>
             <directory name="vendor"/>
         </ignoreFiles>
@@ -18,5 +19,11 @@
 
     <issueHandlers>
         <MissingOverrideAttribute errorLevel="suppress"/>
+        <!-- The first-party CLI is part of the package, so it may use @internal utilities. -->
+        <InternalMethod>
+            <errorLevel type="suppress">
+                <file name="bin/php-dag"/>
+            </errorLevel>
+        </InternalMethod>
     </issueHandlers>
 </psalm>

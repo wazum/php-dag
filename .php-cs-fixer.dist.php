@@ -10,6 +10,9 @@ $finder = Finder::create()
         __DIR__ . '/src',
         __DIR__ . '/tests',
     ])
+    ->append([
+        __DIR__ . '/bin/php-dag',
+    ])
 ;
 
 return (new Config())

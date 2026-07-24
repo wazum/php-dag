@@ -50,7 +50,7 @@
     },
     "scripts": {
         "test": "./vendor/bin/phpunit tests/",
-        "phpstan": "./vendor/bin/phpstan analyse src/ tests/ --level=max",
+        "phpstan": "./vendor/bin/phpstan analyse src/ tests/ bin/php-dag --level=max",
         "psalm": "./vendor/bin/psalm --no-cache",
         "cs-fix": "./vendor/bin/php-cs-fixer fix",
         "cs-check": "./vendor/bin/php-cs-fixer fix --dry-run --diff",
