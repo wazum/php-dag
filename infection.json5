@@ -21,6 +21,10 @@
         // The usort line: mutating the secondary <=> tiebreaker only reorders intervals that
         // share a start, and equal-start intervals always merge into the same result
         // regardless of order, so the merged output is unchanged.
+        // The LabelRenderer slot-walk lines: decrementing a walk start only duplicates the
+        // anchor row, which is already first in the candidate list, so the first fit is
+        // unchanged; excluded per mutator because the Minus mutants on the same lines flip
+        // the walk direction and ARE covered by tests.
         "DecrementInteger": {
             "ignoreSourceCodeByRegex": [
                 "for \\(\\$row = 0; \\$row < \\$canvas->height\\(\\); \\+\\+\\$row\\) \\{",
@@ -28,17 +32,43 @@
                 "\\$direction = \\$preferAbove \\? -1 : 1;",
                 "\\$canvas->horizontalLine\\(\\$row, \\$start, \\$end, 0,.*",
                 "\\$canvas->verticalLine\\(\\$column, \\$start, \\$end, 0,.*",
-                "usort\\(\\$intervals, static fn.*"
+                "usort\\(\\$intervals, static fn.*",
+                "for \\(\\$row = \\$anchorRow - 1; \\$row >= \\$minRow; --\\$row\\) \\{",
+                "for \\(\\$row = \\$anchorRow \\+ 1; \\$row <= \\$maxRow; \\+\\+\\$row\\) \\{"
+            ]
+        },
+        // The LabelRenderer down-walk line: flipping "+ 1" to "- 1" only prepends rows that
+        // are already in the candidate list, so the first-occurrence order is unchanged.
+        "Plus": {
+            "ignoreSourceCodeByRegex": [
+                "for \\(\\$row = \\$anchorRow \\+ 1; \\$row <= \\$maxRow; \\+\\+\\$row\\) \\{"
+            ]
+        },
+        // The LabelReserver deficit guard: at deficit == 0 the skipped shift would move
+        // every column by zero, so both boundaries behave identically.
+        // The LabelRenderer walk bounds: the last walked row is the edge's entry row, where
+        // both side spans always graze the target box (minimum box width 5), so its
+        // candidates never fit and dropping the row changes nothing.
+        "LessThanOrEqualTo": {
+            "ignoreSourceCodeByRegex": [
+                "if \\(\\$deficit <= 0\\) \\{",
+                "for \\(\\$row = min\\(\\$source->row \\+ \\$source->boxHeight\\(\\), \\$minRow\\); \\$row <= \\$maxRow; \\+\\+\\$row\\) \\{",
+                "for \\(\\$row = \\$anchorRow \\+ 1; \\$row <= \\$maxRow; \\+\\+\\$row\\) \\{"
             ]
         },
         // Widening "<" to "<=" makes the formatter loops call Canvas::get() one step past the
         // edge, which autovivifies a fresh row/column, so the re-evaluated bound grows forever.
         // The endless loop is only caught by the process timeout; an inline annotation would
         // suppress every mutant inside the loop body, so the lines are excluded here instead.
+        // The LabelRenderer second-pass guard: column 0 candidates are already handled by
+        // the non-negative first pass, so widening "< 0" to "<= 0" re-checks a slot that
+        // was either taken or unfit; excluded per mutator because the LogicalAnd mutant on
+        // the same line skips the fit check and IS covered by a test.
         "LessThan": {
             "ignoreSourceCodeByRegex": [
                 "for \\(\\$row = 0; \\$row < \\$canvas->height\\(\\); \\+\\+\\$row\\) \\{",
-                "for \\(\\$column = 0; \\$column < \\$canvas->width\\(\\); \\+\\+\\$column\\) \\{"
+                "for \\(\\$column = 0; \\$column < \\$canvas->width\\(\\); \\+\\+\\$column\\) \\{",
+                "if \\(\\$column < 0 && \\$this->labelFits\\(\\$canvas, \\$boxes, \\$row, \\$column, \\$width\\)\\) \\{"
             ]
         },
         // Widening width()/height() by one makes the formatter column/row loops autovivify a

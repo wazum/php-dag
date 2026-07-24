@@ -8,6 +8,7 @@ use PhpDag\Graph\LabelPosition;
 use PhpDag\Layout\FlowDirection;
 use PhpDag\Layout\LayoutEdge;
 use PhpDag\Layout\LayoutGraph;
+use PhpDag\Layout\RealLayoutNode;
 
 final readonly class LabelRenderer implements ElementRenderer
 {
@@ -27,6 +28,9 @@ final readonly class LabelRenderer implements ElementRenderer
         if ($isLeftToRight) {
             $this->renderLeftToRightParallelLabels($canvas, $graph, $parallelGroupSizes);
         }
+
+        $boxes = $this->boxRectangles($graph);
+        $sourcesByTarget = $this->forwardSourcesByTarget($graph);
 
         foreach ($graph->edges() as $layoutEdge) {
             if (null === $layoutEdge->edge->label || [] === $layoutEdge->waypoints) {
@@ -77,31 +81,215 @@ final readonly class LabelRenderer implements ElementRenderer
 
             $firstRow = $layoutEdge->waypoints[0]->row;
             $lastRow = $layoutEdge->waypoints[count($layoutEdge->waypoints) - 1]->row;
-            $labelRow = match ($layoutEdge->edge->label->position) {
+            $anchorRow = match ($layoutEdge->edge->label->position) {
                 LabelPosition::Source => $firstRow + 1,
                 LabelPosition::Target => $lastRow - 1,
                 LabelPosition::Middle => intdiv($firstRow + $lastRow, 2),
             };
-            $edgeColumn = $this->edgeColumnAtRow($layoutEdge->waypoints, $labelRow);
-            $sourceColumn = $layoutEdge->waypoints[0]->column;
-            $preferLeft = $edgeColumn < $sourceColumn;
 
-            if ($preferLeft) {
-                $leftColumn = $edgeColumn - $labelWidth - 1;
-                if ($leftColumn >= 0 && $this->regionFree($canvas, $labelRow, $leftColumn, $labelWidth)) {
-                    $canvas->text($labelRow, $leftColumn, $labelText, self::Z_INDEX, $color);
-                } else {
-                    $canvas->text($labelRow, $edgeColumn + 2, $labelText, self::Z_INDEX, $color);
-                }
-            } else {
-                $rightColumn = $edgeColumn + 2;
-                if ($this->regionFree($canvas, $labelRow, $rightColumn, $labelWidth)) {
-                    $canvas->text($labelRow, $rightColumn, $labelText, self::Z_INDEX, $color);
-                } else {
-                    $canvas->text($labelRow, $edgeColumn - $labelWidth - 1, $labelText, self::Z_INDEX, $color);
-                }
+            // Converging edges share their bend bar with siblings, so the anchor
+            // region is unusable; their labels sit beside their own edge instead,
+            // as close to the source as possible, where the edges are still apart.
+            // Explicit Source/Target positions keep the anchor placement.
+            $slot = null;
+            if (!$layoutEdge->reversed
+                && LabelPosition::Middle === $layoutEdge->edge->label->position
+                && count($sourcesByTarget[$layoutEdge->targetId()] ?? []) >= 2) {
+                $slot = $this->slotBesideOwnEdge($canvas, $graph, $boxes, $layoutEdge, $labelWidth);
+            }
+            [$labelRow, $labelColumn] = $slot ?? $this->slotNearAnchor($canvas, $boxes, $layoutEdge, $anchorRow, $labelWidth);
+            $canvas->text($labelRow, $labelColumn, $labelText, self::Z_INDEX, $color);
+        }
+    }
+
+    /** @return array<string, array<string, true>> */
+    private function forwardSourcesByTarget(LayoutGraph $graph): array
+    {
+        $sourcesByTarget = [];
+        foreach ($graph->edges() as $edge) {
+            if (!$edge->reversed) {
+                /** @infection-ignore-all the stored value is never read; convergence is decided by count() */
+                $sourcesByTarget[$edge->targetId()][$edge->sourceId()] = true;
             }
         }
+
+        return $sourcesByTarget;
+    }
+
+    /** @return list<array{int, int, int, int}> [top, bottom, left, right] */
+    private function boxRectangles(LayoutGraph $graph): array
+    {
+        $boxes = [];
+        foreach ($graph->nodeIds() as $nodeId) {
+            $node = $graph->getLayoutNode($nodeId);
+            if ($node instanceof RealLayoutNode) {
+                $boxes[] = [$node->row, $node->row + $node->boxHeight() - 1, $node->column, $node->column + $node->boxWidth() - 1];
+            }
+        }
+
+        return $boxes;
+    }
+
+    /**
+     * A converging edge's waypoints can start at the shared bend bar, omitting
+     * the vertical drop out of its source box, so the scan starts at the source
+     * exit row; edgeColumnAtRow falls back to the drop's column for those rows.
+     *
+     * @param list<array{int, int, int, int}> $boxes
+     *
+     * @return array{int, int}|null
+     */
+    private function slotBesideOwnEdge(Canvas $canvas, LayoutGraph $graph, array $boxes, LayoutEdge $edge, int $width): ?array
+    {
+        $source = $graph->getLayoutNode($edge->sourceId());
+        // The outer side, away from the bend toward the merge, keeps the label
+        // clear of the converging siblings.
+        /**
+         * @psalm-suppress InvalidArrayOffset, MixedAssignment, MixedPropertyFetch the render loop skips edges without waypoints
+         *
+         * @infection-ignore-all the last two waypoints are the drop into the target and share its column, so reading the second-to-last is equivalent
+         */
+        $entryColumn = $edge->waypoints[count($edge->waypoints) - 1]->column;
+        $preferLeft = $entryColumn > $edge->waypoints[0]->column;
+
+        [$minRow, $maxRow] = $this->rowSpan($edge->waypoints);
+        $candidates = [];
+        for ($row = min($source->row + $source->boxHeight(), $minRow); $row <= $maxRow; ++$row) {
+            $column = $this->edgeColumnAtRow($edge->waypoints, $row);
+            $sides = $preferLeft
+                ? [$column - $width - 1, $column + 2]
+                : [$column + 2, $column - $width - 1];
+            foreach ($sides as $candidate) {
+                $candidates[] = [$row, $candidate];
+            }
+        }
+
+        return $this->firstFit($canvas, $boxes, $candidates, $width);
+    }
+
+    /**
+     * The preferred side of the anchor row first, then every other row along the
+     * edge, and as a last resort the first clear span to the right, so a label is
+     * never dropped and never written over another element.
+     *
+     * @param list<array{int, int, int, int}> $boxes
+     *
+     * @return array{int, int}
+     */
+    private function slotNearAnchor(Canvas $canvas, array $boxes, LayoutEdge $edge, int $anchorRow, int $width): array
+    {
+        $anchorColumn = $this->edgeColumnAtRow($edge->waypoints, $anchorRow);
+        $preferLeft = $anchorColumn < $edge->waypoints[0]->column;
+
+        [$minRow, $maxRow] = $this->rowSpan($edge->waypoints);
+        $rows = [$anchorRow];
+        for ($row = $anchorRow - 1; $row >= $minRow; --$row) {
+            $rows[] = $row;
+        }
+        for ($row = $anchorRow + 1; $row <= $maxRow; ++$row) {
+            $rows[] = $row;
+        }
+
+        $candidates = [];
+        foreach ($rows as $row) {
+            $column = $this->edgeColumnAtRow($edge->waypoints, $row);
+            $sides = $preferLeft
+                ? [$column - $width - 1, $column + 2]
+                : [$column + 2, $column - $width - 1];
+            foreach ($sides as $candidate) {
+                $candidates[] = [$row, $candidate];
+            }
+        }
+        $slot = $this->firstFit($canvas, $boxes, $candidates, $width);
+        if (null !== $slot) {
+            return $slot;
+        }
+
+        for ($column = $anchorColumn + 2;; ++$column) {
+            if ($this->labelFits($canvas, $boxes, $anchorRow, $column, $width)) {
+                return [$anchorRow, $column];
+            }
+        }
+    }
+
+    /**
+     * @param list<Waypoint> $waypoints
+     *
+     * @return array{int, int}
+     */
+    private function rowSpan(array $waypoints): array
+    {
+        $minRow = PHP_INT_MAX;
+        $maxRow = PHP_INT_MIN;
+        foreach ($waypoints as $waypoint) {
+            $minRow = min($minRow, $waypoint->row);
+            $maxRow = max($maxRow, $waypoint->row);
+        }
+
+        return [$minRow, $maxRow];
+    }
+
+    /**
+     * Negative columns shift the whole drawing right when formatted, so they are
+     * a last resort taken only when no on-canvas slot fits.
+     *
+     * @param list<array{int, int}>           $candidates
+     * @param list<array{int, int, int, int}> $boxes
+     *
+     * @return array{int, int}|null
+     */
+    private function firstFit(Canvas $canvas, array $boxes, array $candidates, int $width): ?array
+    {
+        foreach ($candidates as [$row, $column]) {
+            if ($column >= 0 && $this->labelFits($canvas, $boxes, $row, $column, $width)) {
+                return [$row, $column];
+            }
+        }
+        foreach ($candidates as [$row, $column]) {
+            if ($column < 0 && $this->labelFits($canvas, $boxes, $row, $column, $width)) {
+                return [$row, $column];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Clear of boxes, flanked by a free cell on either side, and with the row
+     * beneath empty, so the label keeps visual space to everything around it.
+     *
+     * @param list<array{int, int, int, int}> $boxes
+     */
+    private function labelFits(Canvas $canvas, array $boxes, int $row, int $column, int $width): bool
+    {
+        return $this->regionClear($canvas, $row, $column - 1, $width + 2)
+            && $this->regionClear($canvas, $row + 1, $column, $width)
+            && !$this->overlapsBox($boxes, $row, $column, $width);
+    }
+
+    /** Like regionFree, but probing without materialising cells, so the scan never widens the canvas. */
+    private function regionClear(Canvas $canvas, int $row, int $startColumn, int $width): bool
+    {
+        for ($column = $startColumn; $column < $startColumn + $width; ++$column) {
+            $character = $canvas->cellAt($row, $column)?->resolvedCharacter() ?? '';
+            if ('' !== $character && ' ' !== $character) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /** @param list<array{int, int, int, int}> $boxes */
+    private function overlapsBox(array $boxes, int $row, int $column, int $width): bool
+    {
+        foreach ($boxes as [$top, $bottom, $left, $right]) {
+            if ($row + 1 >= $top && $row <= $bottom && $column <= $right && $column + $width - 1 >= $left) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

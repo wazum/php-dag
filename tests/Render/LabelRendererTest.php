@@ -21,6 +21,7 @@ use PhpDag\Layout\LeftToRightLabelReserver;
 use PhpDag\Layout\LeftToRightPositioning;
 use PhpDag\Layout\LeftToRightRouting;
 use PhpDag\Layout\LongestPathLayering;
+use PhpDag\Layout\RealLayoutNode;
 use PhpDag\Render\BoxRenderer;
 use PhpDag\Render\Canvas;
 use PhpDag\Render\EdgeRenderer;
@@ -133,7 +134,7 @@ final class LabelRendererTest extends TestCase
     }
 
     #[Test]
-    public function placesLabelOnLeftWhenRightSideIsOccupied(): void
+    public function movesToTheNextFreeRowWhenTheAnchorSlotIsOccupied(): void
     {
         $canvas = new Canvas();
         $layoutGraph = $this->buildFullLayout(
@@ -155,8 +156,8 @@ final class LabelRendererTest extends TestCase
 
         (new LabelRenderer())->render($canvas, $layoutGraph);
 
-        $leftColumn = $edgeColumn - 3 - 1;
-        self::assertSame('y', $canvas->get($labelRow, $leftColumn)->resolvedCharacter(), 'Label must fall back to left side when right is occupied');
+        self::assertSame('X', $canvas->get($labelRow, $rightColumn)->resolvedCharacter(), 'The occupied slot must not be overwritten');
+        self::assertSame('y', $canvas->get($labelRow + 1, $rightColumn)->resolvedCharacter(), 'Label must move to the next free row beside the edge');
     }
 
     #[Test]
@@ -232,7 +233,9 @@ final class LabelRendererTest extends TestCase
         $leftNode = $layoutGraph->getLayoutNode('left');
         $verticalColumn = $leftNode->column + intdiv($leftNode->boxWidth(), 2);
 
-        $labelRow = $labeledEdge->waypoints[0]->row + 1;
+        // The source anchor row sits right above the target box, so the label
+        // moves one row up onto the bend row, beside the bar's corner.
+        $labelRow = $labeledEdge->waypoints[0]->row;
 
         $labelWidth = 5;
         $expectedLeftColumn = $verticalColumn - $labelWidth - 1;
@@ -787,6 +790,183 @@ final class LabelRendererTest extends TestCase
 
         self::assertSame('y', $canvas->get(2, 8)->resolvedCharacter(),
             'When the preferred left region is occupied the label must move to the right of the edge');
+    }
+
+    #[Test]
+    public function prefersTheSideAwayFromTheSourceOfABendingEdge(): void
+    {
+        $canvas = new Canvas();
+        $layoutGraph = $this->labeledEdgeGraph([[0, 12], [0, 6], [8, 6]], new Label('yes'));
+
+        (new LabelRenderer())->render($canvas, $layoutGraph);
+
+        self::assertSame('y', $canvas->get(4, 2)->resolvedCharacter(),
+            'A left-bending edge must carry its label on the left, away from the source');
+    }
+
+    #[Test]
+    public function prefersRowsAboveTheAnchorWhenBothSidesAreBlocked(): void
+    {
+        $canvas = new Canvas();
+        $layoutGraph = $this->labeledEdgeGraph([[0, 6], [8, 6]], new Label('yy'));
+
+        $canvas->text(4, 2, 'AAAA', 10);
+        $canvas->text(4, 7, 'AAAA', 10);
+        (new LabelRenderer())->render($canvas, $layoutGraph);
+
+        self::assertSame('y', $canvas->get(2, 8)->resolvedCharacter(),
+            'With the anchor row blocked the label must climb toward the source, not sink below');
+    }
+
+    #[Test]
+    public function anchorsTargetPositionedLabelAtTheRowAboveTheEdgeEnd(): void
+    {
+        $canvas = new Canvas();
+        $layoutGraph = $this->labeledEdgeGraph([[0, 5], [6, 5]], new Label('yy', LabelPosition::Target));
+
+        (new LabelRenderer())->render($canvas, $layoutGraph);
+
+        self::assertSame('y', $canvas->get(5, 7)->resolvedCharacter(),
+            'A Target-positioned label must sit beside the row above the edge end');
+    }
+
+    #[Test]
+    public function rejectsSlotsOverlappingABoxRowBand(): void
+    {
+        $canvas = new Canvas();
+        $layoutGraph = $this->labeledEdgeGraphWithBox([[2, 7], [10, 7]], new Label('yy'), boxRow: 4, boxColumn: 10);
+
+        (new LabelRenderer())->render($canvas, $layoutGraph);
+
+        self::assertSame('y', $canvas->get(6, 4)->resolvedCharacter(),
+            'A slot whose span reaches into a box row band must be rejected in favour of the other side');
+    }
+
+    #[Test]
+    public function acceptsASlotJustPastABoxRightEdge(): void
+    {
+        $canvas = new Canvas();
+        $layoutGraph = $this->labeledEdgeGraphWithBox([[2, 13], [10, 13]], new Label('yy'), boxRow: 4, boxColumn: 10);
+
+        (new LabelRenderer())->render($canvas, $layoutGraph);
+
+        self::assertSame('y', $canvas->get(6, 15)->resolvedCharacter(),
+            'A slot starting right after the box right edge must be accepted');
+    }
+
+    #[Test]
+    public function rejectsASlotTouchingABoxRightEdge(): void
+    {
+        $canvas = new Canvas();
+        $layoutGraph = $this->labeledEdgeGraphWithBox([[2, 12], [10, 12]], new Label('yy'), boxRow: 4, boxColumn: 10);
+
+        (new LabelRenderer())->render($canvas, $layoutGraph);
+
+        self::assertSame('y', $canvas->get(2, 14)->resolvedCharacter(),
+            'A slot starting on the box right edge must be rejected and moved above the box band');
+    }
+
+    #[Test]
+    public function prefersTheRightSideOfAStraightConvergingEdge(): void
+    {
+        $canvas = new Canvas();
+        $layoutGraph = $this->convergingEdgeGraph(new Label('yy'));
+
+        (new LabelRenderer())->render($canvas, $layoutGraph);
+
+        self::assertSame('y', $canvas->get(3, 8)->resolvedCharacter(),
+            'A straight converging edge must carry its label on the right of its own drop');
+    }
+
+    #[Test]
+    public function fallsBackToTheLeftWhenTheRightOfAConvergingEdgeIsBlocked(): void
+    {
+        $canvas = new Canvas();
+        $layoutGraph = $this->convergingEdgeGraph(new Label('ab'));
+        for ($row = 3; $row <= 8; ++$row) {
+            $canvas->text($row, 8, 'XXX', 10);
+        }
+
+        (new LabelRenderer())->render($canvas, $layoutGraph);
+
+        self::assertSame(' ', $canvas->get(3, 2)->resolvedCharacter(), 'The left slot must start exactly at drop - width - 1');
+        self::assertSame('a', $canvas->get(3, 3)->resolvedCharacter(),
+            'With the right side blocked the label must move to the left of its own drop');
+    }
+
+    #[Test]
+    public function skipsAnUnfitNegativeSlotForAFittingOne(): void
+    {
+        $canvas = new Canvas();
+        $layoutGraph = $this->labeledEdgeGraph([[0, 2], [6, 2]], new Label('yy'));
+        for ($row = 0; $row <= 7; ++$row) {
+            $canvas->text($row, 4, 'XXXXX', 10);
+        }
+        $canvas->text(3, -1, 'Z', 10);
+
+        (new LabelRenderer())->render($canvas, $layoutGraph);
+
+        self::assertSame('y', $canvas->get(1, -1)->resolvedCharacter(),
+            'An occupied negative slot must be skipped for a clear one, never overwritten');
+    }
+
+    #[Test]
+    public function requiresAFreeFlankBesideTheLabel(): void
+    {
+        $canvas = new Canvas();
+        $layoutGraph = $this->labeledEdgeGraph([[0, 2], [6, 2]], new Label('yy'));
+        $canvas->text(3, 6, 'Z', 10);
+
+        (new LabelRenderer())->render($canvas, $layoutGraph);
+
+        self::assertSame('y', $canvas->get(2, 4)->resolvedCharacter(),
+            'A slot whose right flank is occupied must be rejected for a clear row');
+    }
+
+    #[Test]
+    public function acceptsASlotEndingJustBeforeABoxLeftEdge(): void
+    {
+        $canvas = new Canvas();
+        $layoutGraph = $this->labeledEdgeGraphWithBox([[2, 6], [10, 6]], new Label('yy'), boxRow: 4, boxColumn: 10);
+
+        (new LabelRenderer())->render($canvas, $layoutGraph);
+
+        self::assertSame('y', $canvas->get(6, 8)->resolvedCharacter(),
+            'A slot ending one column before the box left edge must be accepted');
+    }
+
+    private function convergingEdgeGraph(Label $label): LayoutGraph
+    {
+        $layoutGraph = new LayoutGraph();
+
+        foreach ([['s1', 0, 4], ['s2', 0, 14], ['T', 9, 4]] as [$id, $row, $column]) {
+            $node = new RealLayoutNode($id, new Node($id, 'N'));
+            $node->row = $row;
+            $node->column = $column;
+            $layoutGraph->addNode($node);
+        }
+
+        $labeledEdge = new LayoutEdge(edge: new Edge('s1', 'T', label: $label));
+        $labeledEdge->waypoints = [new Waypoint(3, 6), new Waypoint(8, 6)];
+        $layoutGraph->addEdge($labeledEdge);
+
+        $siblingEdge = new LayoutEdge(edge: new Edge('s2', 'T'));
+        $siblingEdge->waypoints = [new Waypoint(3, 16), new Waypoint(8, 6)];
+        $layoutGraph->addEdge($siblingEdge);
+
+        return $layoutGraph;
+    }
+
+    /** @param list<array{int, int}> $waypointCoordinates */
+    private function labeledEdgeGraphWithBox(array $waypointCoordinates, Label $label, int $boxRow, int $boxColumn): LayoutGraph
+    {
+        $layoutGraph = $this->labeledEdgeGraph($waypointCoordinates, $label);
+        $bystander = new RealLayoutNode('bystander', new Node('bystander', 'B'));
+        $bystander->row = $boxRow;
+        $bystander->column = $boxColumn;
+        $layoutGraph->addNode($bystander);
+
+        return $layoutGraph;
     }
 
     /** @param list<array{int, int}> $waypointCoordinates */

@@ -20,6 +20,9 @@ final class LayoutGraph
     /** @var array<string, int> */
     private array $groupLeftPadding = [];
 
+    /** @var array<int, list<array{int, int}>> column spans reserved for edge labels, keyed by the gap's source layer */
+    private array $reservedLabelSpans = [];
+
     /** @var array<string, list<string>> */
     private array $successorMap = [];
 
@@ -117,6 +120,18 @@ final class LayoutGraph
     public function groupLeftPadding(string $groupId): int
     {
         return $this->groupLeftPadding[$groupId] ?? 2;
+    }
+
+    /** Marks a column span in a layer gap as taken by an edge label, so routing keeps lanes out of it. */
+    public function reserveLabelSpan(int $gapLayer, int $fromColumn, int $toColumn): void
+    {
+        $this->reservedLabelSpans[$gapLayer][] = [$fromColumn, $toColumn];
+    }
+
+    /** @return list<array{int, int}> */
+    public function reservedLabelSpans(int $gapLayer): array
+    {
+        return $this->reservedLabelSpans[$gapLayer] ?? [];
     }
 
     public function getLayoutNode(string $nodeId): LayoutNode

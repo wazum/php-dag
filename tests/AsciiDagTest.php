@@ -447,6 +447,223 @@ final class AsciiDagTest extends TestCase
     }
 
     #[Test]
+    public function rendersEveryEdgeLabelInAConvergentLayout(): void
+    {
+        // Convergent layouts (what a dependency `why` produces) crowd the merging
+        // edges' labels onto one channel; none may be lost or clobbered.
+        $graph = new Graph();
+        foreach (['src', 'm0', 'm1', 'm2', 'dst'] as $id) {
+            $graph->addNode(new Node($id, $id));
+        }
+        $graph->addEdge(new Edge('src', 'm0'));
+        $graph->addEdge(new Edge('src', 'm1'));
+        $graph->addEdge(new Edge('src', 'm2'));
+        $graph->addEdge(new Edge('m0', 'dst', label: new Label('1.2.0')));
+        $graph->addEdge(new Edge('m1', 'dst', label: new Label('3.4.5')));
+        $graph->addEdge(new Edge('m2', 'dst', label: new Label('6.7.8')));
+
+        $result = AsciiDag::default()->render($graph);
+
+        $expected = <<<'EXPECTED'
+                ╭─────╮
+                │ src │
+                ╰──┬──╯
+                   │
+           ┌───────┼───────┐
+           ▼       ▼       ▼
+        ╭──┴─╮  ╭──┴─╮  ╭──┴─╮
+        │ m0 │  │ m1 │  │ m2 │
+        ╰──┬─╯  ╰──┬─╯  ╰──┬─╯
+           │ 1.2.0 │ 3.4.5 │ 6.7.8
+           │       │       │
+           └───────┼───────┘
+                   ▼
+                ╭──┴──╮
+                │ dst │
+                ╰─────╯
+        EXPECTED;
+
+        self::assertSame($expected, $result, sprintf("Converging labels must sit beside their own edge with a clear line below:\n%s", $result));
+    }
+
+    #[Test]
+    public function keepsEveryLabelVisibleWhenConvergingLabelsExceedTheirChannels(): void
+    {
+        // Labels wider than the space between the converging verticals cannot sit
+        // beside their own edge; they must still all render somewhere, never be
+        // dropped or overwrite one another.
+        $graph = new Graph();
+        foreach (['src', 'm0', 'm1', 'm2', 'dst'] as $id) {
+            $graph->addNode(new Node($id, $id));
+        }
+        $graph->addEdge(new Edge('src', 'm0'));
+        $graph->addEdge(new Edge('src', 'm1'));
+        $graph->addEdge(new Edge('src', 'm2'));
+        $labels = ['requires-1.2.0', 'requires-3.4.5', 'requires-6.7.8'];
+        $graph->addEdge(new Edge('m0', 'dst', label: new Label($labels[0])));
+        $graph->addEdge(new Edge('m1', 'dst', label: new Label($labels[1])));
+        $graph->addEdge(new Edge('m2', 'dst', label: new Label($labels[2])));
+
+        $result = AsciiDag::default()->render($graph);
+
+        // Wide labels fan the converging drops out until every label fits
+        // beside its own edge.
+        $expected = <<<'EXPECTED'
+                         ╭─────╮
+                         │ src │
+                         ╰──┬──╯
+                            │
+           ┌────────────────┼────────────────┐
+           ▼                ▼                ▼
+        ╭──┴─╮           ╭──┴─╮           ╭──┴─╮
+        │ m0 │           │ m1 │           │ m2 │
+        ╰──┬─╯           ╰──┬─╯           ╰──┬─╯
+           │ requires-1.2.0 │ requires-3.4.5 │ requires-6.7.8
+           │                │                │
+           └────────────────┼────────────────┘
+                            ▼
+                         ╭──┴──╮
+                         │ dst │
+                         ╰─────╯
+        EXPECTED;
+
+        self::assertSame($expected, $result, sprintf("Wide converging labels must fan out and sit beside their own edge:\n%s", $result));
+    }
+
+    #[Test]
+    public function rendersDiamondEdgeLabelsBesideTheirOwnEdges(): void
+    {
+        // Diverging labels sit beside the fan-out bar; converging labels get a
+        // reserved row and sit beside their own edge above the merge bar.
+        $graph = new Graph();
+        foreach (['A', 'B', 'C', 'D'] as $id) {
+            $graph->addNode(new Node($id, $id));
+        }
+        $graph->addEdge(new Edge('A', 'B', label: new Label('1.0')));
+        $graph->addEdge(new Edge('A', 'C', label: new Label('2.0')));
+        $graph->addEdge(new Edge('B', 'D', label: new Label('3.0')));
+        $graph->addEdge(new Edge('C', 'D', label: new Label('4.0')));
+
+        $result = AsciiDag::default()->render($graph);
+
+        $expected = <<<'EXPECTED'
+             ╭───╮
+             │ A │
+             ╰─┬─╯
+               │
+        1.0 ┌──┴───┐ 2.0
+            ▼      ▼
+          ╭─┴─╮  ╭─┴─╮
+          │ B │  │ C │
+          ╰─┬─╯  ╰─┬─╯
+        3.0 │      │ 4.0
+            │      │
+            └──┬───┘
+               ▼
+             ╭─┴─╮
+             │ D │
+             ╰───╯
+        EXPECTED;
+
+        self::assertSame($expected, $result, sprintf("Diamond labels must sit beside their own edges:\n%s", $result));
+    }
+
+    #[Test]
+    public function widensOnlyTheConvergingChannelsWhoseLabelsNeedTheRoom(): void
+    {
+        // Labels of different widths, edges declared out of left-to-right order,
+        // an unlabeled sibling, and one wider box: only the channel beside the
+        // wide label gains columns.
+        $graph = new Graph();
+        $graph->addNode(new Node('src', 'src'));
+        $graph->addNode(new Node('aa', 'middle-node'));
+        $graph->addNode(new Node('bb', 'bb'));
+        $graph->addNode(new Node('cc', 'cc'));
+        $graph->addNode(new Node('dst', 'dst'));
+        $graph->addEdge(new Edge('src', 'aa'));
+        $graph->addEdge(new Edge('src', 'bb'));
+        $graph->addEdge(new Edge('src', 'cc'));
+        $graph->addEdge(new Edge('cc', 'dst', label: new Label('ww-9.9.9')));
+        $graph->addEdge(new Edge('aa', 'dst', label: new Label('aa')));
+        $graph->addEdge(new Edge('bb', 'dst'));
+
+        $result = AsciiDag::default()->render($graph);
+
+        $expected = <<<'EXPECTED'
+                         ╭─────╮
+                         │ src │
+                         ╰──┬──╯
+                            │
+               ┌────────────┼───────┐
+               ▼            ▼       ▼
+        ╭──────┴──────╮  ╭──┴─╮  ╭──┴─╮
+        │ middle-node │  │ bb │  │ cc │
+        ╰──────┬──────╯  ╰──┬─╯  ╰──┬─╯
+            aa │            │       │ ww-9.9.9
+               │            │       │
+               └────────────┼───────┘
+                            ▼
+                         ╭──┴──╮
+                         │ dst │
+                         ╰─────╯
+        EXPECTED;
+
+        self::assertSame($expected, $result, sprintf("Mixed-width converging labels must each sit beside their own edge:\n%s", $result));
+    }
+
+    #[Test]
+    public function routesALongEdgeAroundTheChannelsClaimedByConvergingLabels(): void
+    {
+        // Two converging families plus a long edge threading through the same
+        // gap: the channels widen per family and the long edge's lane must keep
+        // out of the claimed spans instead of forcing a label away from its edge.
+        $graph = new Graph();
+        foreach (['src', 'a', 'b', 'c', 'd', 't1', 't2', 'z'] as $id) {
+            $graph->addNode(new Node($id, $id));
+        }
+        $graph->addEdge(new Edge('src', 'z', label: new Label('direct')));
+        $graph->addEdge(new Edge('src', 'a'));
+        $graph->addEdge(new Edge('src', 'b'));
+        $graph->addEdge(new Edge('src', 'c'));
+        $graph->addEdge(new Edge('src', 'd'));
+        $graph->addEdge(new Edge('a', 't1', label: new Label('wide-aaa')));
+        $graph->addEdge(new Edge('b', 't1', label: new Label('wide-bbb')));
+        $graph->addEdge(new Edge('c', 't2', label: new Label('wide-ccc')));
+        $graph->addEdge(new Edge('d', 't2', label: new Label('wide-ddd')));
+        $graph->addEdge(new Edge('t1', 'z'));
+        $graph->addEdge(new Edge('t2', 'z'));
+
+        $result = AsciiDag::default()->render($graph);
+
+        $expected = <<<'EXPECTED'
+                             ╭─────╮
+                             │ src │
+                             ╰──┬──╯
+                                │
+              ┌──────────┬──────┴────────────┬──────┬──────────┐ direct
+              ▼          ▼                   ▼      ▼          │
+            ╭─┴─╮      ╭─┴─╮               ╭─┴─╮  ╭─┴─╮        │
+            │ a │      │ b │               │ c │  │ d │        │
+            ╰─┬─╯      ╰─┬─╯               ╰─┬─╯  ╰─┬─╯        │
+              │ wide-aaa │ wide-bbb wide-ccc │      │ wide-ddd │
+              │          │                   │      │          │
+              └──┬───────┘                   └──┬───┘          │
+                 ▼                              ▼              │
+              ╭──┴─╮                         ╭──┴─╮            │
+              │ t1 │                         │ t2 │            │
+              ╰──┬─╯                         ╰──┬─╯            │
+                 │                              │              │
+                 └──────────────────────────────┼──────────────┘
+                                                ▼
+                                              ╭─┴─╮
+                                              │ z │
+                                              ╰───╯
+        EXPECTED;
+
+        self::assertSame($expected, $result, sprintf("A long edge must route around claimed label channels:\n%s", $result));
+    }
+
+    #[Test]
     public function rendersALabeledSelfLoopEvenAfterAnUnlabeledOne(): void
     {
         $graph = new Graph();

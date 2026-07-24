@@ -10,6 +10,7 @@ use PhpDag\Graph\Label;
 use PhpDag\Graph\LabelPosition;
 use PhpDag\Graph\Node;
 use PhpDag\Layout\BrandesKopfPositioning;
+use PhpDag\Layout\DummyLayoutNode;
 use PhpDag\Layout\DummyNodeInserter;
 use PhpDag\Layout\LabelReserver;
 use PhpDag\Layout\LayoutEdge;
@@ -168,6 +169,139 @@ final class LabelReserverTest extends TestCase
         (new LabelReserver())->process($graph);
 
         self::assertSame($columnBBefore, $graph->getLayoutNode('B')->column, 'Column must not change when label fits');
+    }
+
+    #[Test]
+    public function reservesLabelSpansAndWidensOnlyTheChannelThatNeedsIt(): void
+    {
+        $graph = new LayoutGraph();
+        $sourceOne = $this->placedNode($graph, 's1', layer: 0, column: 0);
+        $sourceTwo = $this->placedNode($graph, 's2', layer: 0, column: 8);
+        $sourceThree = $this->placedNode($graph, 's3', layer: 0, column: 16);
+        $target = $this->placedNode($graph, 'T', layer: 1, column: 8, row: 6);
+
+        $this->connectLabeled($graph, 's1', 'T', 'aa');
+        $this->connectLabeled($graph, 's2', 'T', 'wide-99.99');
+        $this->connectLabeled($graph, 's3', 'T', null);
+        $graph->buildLayerIndex();
+
+        (new LabelReserver())->process($graph);
+
+        self::assertSame(0, $sourceOne->column, 'The channel beside the narrow label already fits');
+        self::assertSame(8, $sourceTwo->column);
+        self::assertSame(21, $sourceThree->column, 'The channel beside the wide label must gain 2+10+1 - 8 = 5 columns');
+        self::assertSame(8, $target->column, 'The target sits left of the shift threshold');
+        self::assertSame([[3, 6], [11, 22]], $graph->reservedLabelSpans(0), 'Each claim reserves label width plus flanks beside its drop');
+    }
+
+    #[Test]
+    public function recordsNoSpanForExplicitlyPositionedLabels(): void
+    {
+        $graph = new LayoutGraph();
+        $this->placedNode($graph, 's1', layer: 0, column: 0);
+        $this->placedNode($graph, 's2', layer: 0, column: 8);
+        $this->placedNode($graph, 'T', layer: 1, column: 4, row: 6);
+
+        $this->connectLabeled($graph, 's1', 'T', null);
+        $labeledEdge = new Edge('s2', 'T', label: new Label('wide-99.99', LabelPosition::Target));
+        $graph->addEdge(new LayoutEdge(edge: $labeledEdge));
+        $graph->storeOriginalEdge($labeledEdge);
+        $graph->buildLayerIndex();
+
+        (new LabelReserver())->process($graph);
+
+        self::assertSame([], $graph->reservedLabelSpans(0), 'Only Middle-positioned labels claim converging channels');
+    }
+
+    #[Test]
+    public function claimsTheSideDictatedByTheEntryCentre(): void
+    {
+        // The drop sits one column left of the entry, so the label claims the
+        // left channel; measuring the entry centre differently flips the side.
+        $graph = new LayoutGraph();
+        $this->placedNode($graph, 's1', layer: 0, column: 0);
+        $this->placedNode($graph, 's2', layer: 0, column: 5);
+        $this->placedNode($graph, 'T', layer: 1, column: 6, row: 6);
+
+        $this->connectLabeled($graph, 's1', 'T', null);
+        $this->connectLabeled($graph, 's2', 'T', 'qq');
+        $graph->buildLayerIndex();
+
+        (new LabelReserver())->process($graph);
+
+        self::assertSame([[3, 6]], $graph->reservedLabelSpans(0));
+    }
+
+    #[Test]
+    public function mergesSameCentreBoundsToTheLeftmostColumn(): void
+    {
+        // A real node and a dummy share a centre column: the shift threshold
+        // must be the leftmost owner so the real box moves with its bound.
+        $graph = new LayoutGraph();
+        $left = $this->placedNode($graph, 'L', layer: 0, column: 0);
+        $middle = $this->placedNode($graph, 'R', layer: 0, column: 4);
+        $target = $this->placedNode($graph, 'T', layer: 1, column: 0, row: 6);
+        $this->placedNode($graph, 'X', layer: 1, column: 30, row: 6);
+
+        $dummy = new DummyLayoutNode('D', 'p', 'q');
+        $dummy->layer = 0;
+        $dummy->row = 0;
+        $dummy->column = 6;
+        $graph->addNode($dummy);
+
+        $this->connectLabeled($graph, 'L', 'T', 'wwwwww');
+        $this->connectLabeled($graph, 'R', 'T', null);
+        $graph->addEdge(new LayoutEdge(edge: new Edge('D', 'X')));
+        $graph->buildLayerIndex();
+
+        (new LabelReserver())->process($graph);
+
+        self::assertSame(0, $left->column);
+        self::assertSame(0, $target->column);
+        self::assertSame(9, $middle->column, 'The bound owner and everything at or right of it shift by the deficit');
+        self::assertSame(11, $dummy->column);
+    }
+
+    #[Test]
+    public function reservesSpansForConvergingFamiliesInEveryGapLayer(): void
+    {
+        // Two merge points at different depths, each fed by a labeled pair; both
+        // gaps must reserve their spans, not only the first one encountered.
+        $graph = new LayoutGraph();
+        $this->placedNode($graph, 'a0', layer: 0, column: 0);
+        $this->placedNode($graph, 'b0', layer: 0, column: 12);
+        $this->placedNode($graph, 'm', layer: 1, column: 0, row: 6);
+        $this->placedNode($graph, 'n', layer: 1, column: 14, row: 6);
+        $this->placedNode($graph, 'T', layer: 2, column: 0, row: 12);
+
+        $this->connectLabeled($graph, 'a0', 'm', 'gapzero-a');
+        $this->connectLabeled($graph, 'b0', 'm', 'gapzero-b');
+        $this->connectLabeled($graph, 'm', 'T', 'gapone-m');
+        $this->connectLabeled($graph, 'n', 'T', 'gapone-n');
+        $graph->buildLayerIndex();
+
+        (new LabelReserver())->process($graph);
+
+        self::assertNotSame([], $graph->reservedLabelSpans(0), 'The first gap must reserve its label channels');
+        self::assertNotSame([], $graph->reservedLabelSpans(1), 'The second gap must reserve its label channels too');
+    }
+
+    private function placedNode(LayoutGraph $graph, string $id, int $layer, int $column, int $row = 0): RealLayoutNode
+    {
+        $node = new RealLayoutNode($id, new Node($id, 'N'));
+        $node->layer = $layer;
+        $node->row = $row;
+        $node->column = $column;
+        $graph->addNode($node);
+
+        return $node;
+    }
+
+    private function connectLabeled(LayoutGraph $graph, string $sourceId, string $targetId, ?string $labelText): void
+    {
+        $edge = new Edge($sourceId, $targetId, label: null === $labelText ? null : new Label($labelText));
+        $graph->addEdge(new LayoutEdge(edge: $edge));
+        $graph->storeOriginalEdge($edge);
     }
 
     #[Test]

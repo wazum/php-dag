@@ -343,6 +343,15 @@ final readonly class ChainAwareRouting implements EdgeRouting
 
     private function columnConflictsWithRealNodes(int $column, int $layer, LayoutGraph $graph): bool
     {
+        // The lane column picked at this layer is what descends through the gap
+        // below it, so it must stay out of the spans reserved there for labels.
+        foreach ($graph->reservedLabelSpans($layer) as [$fromColumn, $toColumn]) {
+            /** @infection-ignore-all boundary and operator mutations are absorbed by separatedLaneColumn's nearest-clear-column search converging on the same lane; removing the check entirely is pinned by the long-edge-avoids-claimed-channels golden */
+            if ($column >= $fromColumn && $column <= $toColumn) {
+                return true;
+            }
+        }
+
         foreach ($graph->layerIndex()[$layer] ?? [] as $nodeId) {
             $node = $graph->getLayoutNode($nodeId);
             if ($node instanceof DummyLayoutNode) {
