@@ -258,7 +258,7 @@ final class Graph
         $roots = [];
         foreach (array_keys($this->nodes) as $nodeId) {
             if (!isset($this->predecessorMap[$nodeId]) && !isset($selfLooped[$nodeId])) {
-                $roots[] = $nodeId;
+                $roots[] = strval($nodeId);
             }
         }
 
@@ -284,7 +284,7 @@ final class Graph
         $leaves = [];
         foreach (array_keys($this->nodes) as $nodeId) {
             if (!isset($this->successorMap[$nodeId]) && !isset($selfLooped[$nodeId])) {
-                $leaves[] = $nodeId;
+                $leaves[] = strval($nodeId);
             }
         }
 
@@ -303,7 +303,7 @@ final class Graph
         return $this->incomingEdgesByNodeId[$nodeId] ?? [];
     }
 
-    /** @return array<string, Node> */
+    /** @return array<array-key, Node> keyed by node id (PHP coerces canonical numeric-string ids to int keys) */
     public function nodes(): array
     {
         return $this->nodes;

@@ -331,6 +331,21 @@ final class GraphTest extends TestCase
     }
 
     #[Test]
+    public function rootsAndLeavesReturnNumericIdsAsStrings(): void
+    {
+        // PHP coerces canonical numeric-string array keys to int, so array_keys()
+        // over the node map yields ints; roots()/leaves() must restore the string
+        // ids their list<string> contract promises.
+        $graph = new Graph();
+        $graph->addNode(new Node('1', 'one'));
+        $graph->addNode(new Node('2', 'two'));
+        $graph->addEdge(new Edge('1', '2'));
+
+        self::assertSame(['1'], $graph->roots());
+        self::assertSame(['2'], $graph->leaves());
+    }
+
+    #[Test]
     public function outgoingEdgesReturnsOutgoingEdges(): void
     {
         $graph = new Graph();
