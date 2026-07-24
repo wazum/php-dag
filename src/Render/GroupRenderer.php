@@ -137,8 +137,7 @@ final readonly class GroupRenderer implements ElementRenderer
         }
 
         $text = ' '.mb_strimwidth($label, 0, $available, '…').' ';
-        /** @infection-ignore-all mb_strlen counts on-screen columns; the label is drawn glyph-by-glyph from $start, and the avoidance lands on the same slot under a byte count unless a crossing falls in the byte-vs-glyph gap — not reachable through the widening pipeline */
-        $width = mb_strlen($text);
+        $width = mb_strwidth($text);
         $start = $this->labelStartColumn($borderLeft, $borderRight, $width, $crossingColumns);
         $canvas->text($borderTop, $start, $text, self::Z_INDEX);
 

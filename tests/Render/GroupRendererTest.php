@@ -119,6 +119,27 @@ final class GroupRendererTest extends TestCase
     }
 
     #[Test]
+    public function restoresACrossingUnderAWideGlyphLabelMeasuredInColumns(): void
+    {
+        // Each CJK glyph is two terminal columns wide. A top-border crossing
+        // falls under the label, which has no clear slot and falls back onto it,
+        // so the junction must be redrawn on top. Measuring the label in glyphs
+        // rather than display columns underestimates its span and leaves the
+        // covered crossing erased.
+        $canvas = $this->canvasWithGroup(memberTitle: 'Member', label: '日本語', row: 3, column: 4);
+        (new EdgeRenderer())->renderRoute(
+            $canvas,
+            new EdgeRoute(waypoints: [new Waypoint(0, 9), new Waypoint(2, 9)], edgeId: 1, targetArrow: false),
+        );
+
+        (new GroupRenderer())->render($canvas, $this->lastLayoutGraph);
+
+        $topLine = explode("\n", (new PlainTextFormatter())->format($canvas))[1];
+
+        self::assertSame('  ╔═ 日本╪ ═══╗', $topLine);
+    }
+
+    #[Test]
     public function placesTheLabelClearOfEveryTopBorderCrossingNotJustTheFirst(): void
     {
         // Two edges drop through the top border (columns 5 and 9). The label must

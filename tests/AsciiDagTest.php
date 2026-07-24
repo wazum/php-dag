@@ -557,6 +557,29 @@ final class AsciiDagTest extends TestCase
     }
 
     #[Test]
+    public function keepsTheClusterBorderRectangularForAWideEmojiLabel(): void
+    {
+        // Emoji are two terminal columns wide. Measuring the label in code points
+        // rather than display columns under-reserves the border, so the label runs
+        // over the top-right corner. Both borders must stay the same width.
+        $graph = new Graph();
+        $graph->addNode(new Node('a', 'X'));
+        $graph->addNode(new Node('b', 'Y'));
+        $graph->addEdge(new Edge('a', 'b'));
+        $graph->addGroup(new Group('cluster', '🚀🚀🚀🚀🚀', ['a', 'b']));
+
+        $lines = explode("\n", AsciiDag::default()->render($graph));
+        $top = $lines[0];
+        $bottom = $lines[array_key_last($lines)];
+
+        self::assertStringStartsWith('╔', $top);
+        self::assertStringEndsWith('╗', $top);
+        self::assertStringStartsWith('╚', $bottom);
+        self::assertStringEndsWith('╝', $bottom);
+        self::assertSame(mb_strwidth($bottom), mb_strwidth($top), 'Top and bottom cluster borders must align');
+    }
+
+    #[Test]
     public function graphWithoutGroupsRendersNoBorder(): void
     {
         $graph = new Graph();

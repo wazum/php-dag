@@ -282,6 +282,25 @@ final class GroupSpacerTest extends TestCase
     }
 
     #[Test]
+    public function measuresTheLabelWidthInDisplayColumnsNotGlyphs(): void
+    {
+        // '日' is a single glyph but occupies two terminal columns, so its label
+        // needs 4 columns — one past the 3-column entry gap — and must widen the
+        // left padding exactly like the 2-glyph 'AB' case. Counting glyphs would
+        // see width 3, fit the gap and skip widening.
+        $graph = new Graph();
+        $graph->addNode(new Node('member', 'M'));
+        $graph->addGroup(new Group('cluster', '日', ['member']));
+
+        $layoutGraph = LayoutGraph::fromGraph($graph);
+        $this->place($layoutGraph, 'member', row: 10, column: 10);
+
+        (new GroupSpacer())->process($layoutGraph);
+
+        self::assertSame(4, $layoutGraph->groupLeftPadding('cluster'));
+    }
+
+    #[Test]
     public function keepsTheRingWhenTheLabelFitsTheGapBetweenTwoCrossings(): void
     {
         // Two members leave a wide crossing-free gap between their centres; a

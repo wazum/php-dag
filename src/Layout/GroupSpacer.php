@@ -108,7 +108,7 @@ final readonly class GroupSpacer implements Processor
         if ('' === $group->label) {
             return self::MARGIN;
         }
-        $labelWidth = mb_strlen($group->label) + 2;
+        $labelWidth = mb_strwidth($group->label) + 2;
 
         $crossings = [];
         foreach ($group->nodeIds as $nodeId) {
