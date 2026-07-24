@@ -1,0 +1,10 @@
+/vendor/
+/.phpunit.cache/
+/.php-cs-fixer.cache
+/.idea/
+composer.lock
+/tmp/
+*.log
+/docs/
+/PLAN.md
+/.claude/

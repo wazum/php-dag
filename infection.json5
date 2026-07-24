@@ -1,0 +1,136 @@
+{
+    "$schema": "vendor/infection/infection/resources/schema.json",
+    "source": {
+        "directories": [
+            "src"
+        ]
+    },
+    "mutators": {
+        "@default": true,
+        // Decrementing the row counter to -1 only prepends an all-blank line that the
+        // leading-blank trim in both formatters removes again; an inline annotation would
+        // suppress every mutant inside the loop body, so the line is excluded here instead.
+        // The DotParser line: landing on the newline instead of after it is equivalent,
+        // the whitespace branch consumes it on the next tokenizer iteration.
+        // The LabelRenderer $direction line: turning the "1" branch into "0" makes the
+        // label-placement scan step by zero, so the while loop spins until the process
+        // timeout; no assertion can detect the hang faster.
+        // The horizontalLine/verticalLine lines: the "0" is the edge id for coalesced
+        // uncoloured spans; it only drives passthrough tracking, never the glyph or colour,
+        // so decrementing it is equivalent.
+        // The usort line: mutating the secondary <=> tiebreaker only reorders intervals that
+        // share a start, and equal-start intervals always merge into the same result
+        // regardless of order, so the merged output is unchanged.
+        "DecrementInteger": {
+            "ignoreSourceCodeByRegex": [
+                "for \\(\\$row = 0; \\$row < \\$canvas->height\\(\\); \\+\\+\\$row\\) \\{",
+                "\\$offset = false === \\$newlinePosition \\? \\$length : \\$newlinePosition \\+ 1;",
+                "\\$direction = \\$preferAbove \\? -1 : 1;",
+                "\\$canvas->horizontalLine\\(\\$row, \\$start, \\$end, 0,.*",
+                "\\$canvas->verticalLine\\(\\$column, \\$start, \\$end, 0,.*",
+                "usort\\(\\$intervals, static fn.*"
+            ]
+        },
+        // Widening "<" to "<=" makes the formatter loops call Canvas::get() one step past the
+        // edge, which autovivifies a fresh row/column, so the re-evaluated bound grows forever.
+        // The endless loop is only caught by the process timeout; an inline annotation would
+        // suppress every mutant inside the loop body, so the lines are excluded here instead.
+        "LessThan": {
+            "ignoreSourceCodeByRegex": [
+                "for \\(\\$row = 0; \\$row < \\$canvas->height\\(\\); \\+\\+\\$row\\) \\{",
+                "for \\(\\$column = 0; \\$column < \\$canvas->width\\(\\); \\+\\+\\$column\\) \\{"
+            ]
+        },
+        // Widening width()/height() by one makes the formatter column/row loops autovivify a
+        // cell past the edge on every pass (the bound keeps growing), so the integration tests
+        // that run first hang until the process timeout, although CanvasTest asserts the exact
+        // values; excluded per mutator to keep the DecrementInteger mutants on these lines alive.
+        // The LabelRenderer $direction line: turning the "-1" branch into "-0" makes the
+        // label-placement scan step by zero, so the while loop spins until the process
+        // timeout; no assertion can detect the hang faster.
+        // The horizontalLine/verticalLine lines: the "0" edge id for coalesced uncoloured
+        // spans only drives passthrough tracking, never the glyph or colour, so incrementing
+        // it is equivalent. (The primary <=> keys on the usort line are deliberately NOT
+        // listed: mis-sorting intervals there changes the merged output and is covered by a
+        // test.)
+        "IncrementInteger": {
+            "ignoreSourceCodeByRegex": [
+                "return \\$maxColumn \\+ 1;",
+                "return max\\(array_keys\\(\\$this->cells\\)\\) \\+ 1;",
+                "\\$direction = \\$preferAbove \\? -1 : 1;",
+                "\\$canvas->horizontalLine\\(\\$row, \\$start, \\$end, 0,.*",
+                "\\$canvas->verticalLine\\(\\$column, \\$start, \\$end, 0,.*"
+            ]
+        },
+        // Emptying the GroupRenderer member-bounds loop leaves the PHP_INT_MAX/PHP_INT_MIN
+        // sentinels in place, so the border is drawn at PHP_INT_MAX coordinates and the
+        // formatter loops over ~PHP_INT_MAX rows until the process timeout; the non-empty
+        // loop is guaranteed by the preceding "[] === $members" early return.
+        "Foreach_": {
+            "ignoreSourceCodeByRegex": [
+                "foreach \\(\\$members as \\$member\\) \\{"
+            ]
+        },
+        // Negating the trim-loop guards makes them pop/shift an empty array forever (PHP happily
+        // returns null), so the loop spins until the process timeout; excluded per mutator so the
+        // other condition mutants on these lines stay alive.
+        "LogicalAndNegation": {
+            "ignoreSourceCodeByRegex": [
+                "while \\(\\[\\] !== \\$lines && '' === end\\(\\$lines\\)\\) \\{",
+                "while \\(\\[\\] !== \\$lines && '' === \\$lines\\[0\\]\\) \\{",
+                "while \\(\\[\\] !== \\$cells && ' ' === end\\(\\$cells\\)\\[0\\]\\) \\{"
+            ]
+        },
+        // Removing the pop/shift from the trim loops leaves their condition constantly true, so
+        // the loop spins until the process timeout; no assertion can detect the hang faster.
+        "FunctionCallRemoval": {
+            "ignoreSourceCodeByRegex": [
+                "array_pop\\(\\$lines\\);",
+                "array_shift\\(\\$lines\\);",
+                "array_pop\\(\\$cells\\);"
+            ]
+        },
+        // Rewriting the interval-sort's short-ternary into a full ternary, or reversing the
+        // secondary spaceship, only affects the tiebreaker between equal-start intervals.
+        // Equal-start intervals always merge into the same result regardless of order, so the
+        // merged output is unchanged.
+        "Ternary": {
+            "ignoreSourceCodeByRegex": [
+                "usort\\(\\$intervals, static fn.*"
+            ]
+        },
+        "Spaceship": {
+            "ignoreSourceCodeByRegex": [
+                "usort\\(\\$intervals, static fn.*"
+            ]
+        },
+        // The chain accumulator's "edges" entry is redundant: every dummy id in the chain has
+        // at least one incident edge, and the second pass autovivifies "edges" before writing
+        // the accumulator back, so seeding it with an empty array changes nothing.
+        "ArrayItemRemoval": {
+            "ignoreSourceCodeByRegex": [
+                "'edges' => \\[\\],"
+            ]
+        },
+        // This branch is only reached when the character at the offset is "-", and the
+        // regex's first token is "-", so the earliest possible match is always at the
+        // offset itself: dropping the /A anchor cannot change which numeral is matched for
+        // any well-formed DOT. It only differs for a malformed stray "-", which both the
+        // anchored and unanchored paths reject anyway.
+        "PregMatchRemoveFlags": {
+            "ignoreSourceCodeByRegex": [
+                "if \\('-' === \\$character && 1 === preg_match.*"
+            ]
+        },
+        // Dropping array_values() around the edge filter only leaves gaps in the array keys.
+        // Every consumer iterates the edges with foreach or spreads them (both key-agnostic)
+        // and rebuildEdgeIndexes() re-derives all indexes, so the output is unchanged; the
+        // reindex exists purely to honour the list<LayoutEdge> type (PHPStan proves it is
+        // always already a list, so no assertion can observe the difference).
+        "UnwrapArrayValues": {
+            "ignoreSourceCodeByRegex": [
+                "\\$this->edges = array_values\\(array_filter\\(.*"
+            ]
+        }
+    }
+}

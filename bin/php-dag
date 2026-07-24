@@ -1,0 +1,147 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use PhpDag\AsciiDag;
+use PhpDag\Dot\DotParser;
+use PhpDag\Graph\ControlCharacters;
+use PhpDag\Layout\FlowDirection;
+use PhpDag\Layout\LayoutQuality;
+
+foreach ([__DIR__.'/../../../autoload.php', __DIR__.'/../vendor/autoload.php'] as $autoloadCandidate) {
+    if (file_exists($autoloadCandidate)) {
+        require $autoloadCandidate;
+        break;
+    }
+}
+
+const USAGE = <<<'USAGE'
+Usage: php-dag [options] [file]
+
+Render a Graphviz DOT file as ASCII art. Reads from stdin when no file
+is given or when file is "-".
+
+Options:
+  --direction=tb|lr  Override flow direction (default: rankdir from the file)
+  --quality=Q        Layout effort: fast|standard|quality (standard/quality use
+                     network-simplex layering; fast uses longest-path)
+  --node-spacing=N   Minimum gap between sibling boxes (default: 2)
+  --rank-spacing=N   Minimum gap between layers (default: 2)
+  --ascii            Pure ASCII output (no Unicode box-drawing characters)
+  --ansi             Force colored output (default: auto-detect terminal)
+  --no-ansi          Force plain output
+  -h, --help         Show this help
+
+Examples:
+  php-dag deps.dot
+  terraform graph | php-dag --direction=lr
+  composer-dependency-tool | php-dag --ascii > graph.txt
+USAGE;
+
+/** @return never */
+function fail(string $message): void
+{
+    fwrite(STDERR, $message.PHP_EOL);
+    exit(1);
+}
+
+$file = null;
+$direction = null;
+$asciiGlyphs = false;
+$ansi = null;
+$nodeSpacing = null;
+$rankSpacing = null;
+$quality = null;
+
+foreach (array_slice($argv, 1) as $argument) {
+    if ('-h' === $argument || '--help' === $argument) {
+        echo USAGE.PHP_EOL;
+        exit(0);
+    }
+    if (1 === preg_match('/^--quality=(fast|standard|quality)$/i', $argument, $matches)) {
+        $quality = match (strtolower($matches[1])) {
+            'fast' => LayoutQuality::Fast,
+            'quality' => LayoutQuality::Quality,
+            default => LayoutQuality::Standard,
+        };
+        continue;
+    }
+    if (1 === preg_match('/^--node-spacing=(\d+)$/', $argument, $matches)) {
+        $nodeSpacing = (int) $matches[1];
+        continue;
+    }
+    if (1 === preg_match('/^--rank-spacing=(\d+)$/', $argument, $matches)) {
+        $rankSpacing = (int) $matches[1];
+        continue;
+    }
+    if ('--ascii' === $argument) {
+        $asciiGlyphs = true;
+        continue;
+    }
+    if ('--ansi' === $argument) {
+        $ansi = true;
+        continue;
+    }
+    if ('--no-ansi' === $argument) {
+        $ansi = false;
+        continue;
+    }
+    if (1 === preg_match('/^--direction=(tb|lr)$/i', $argument, $matches)) {
+        $direction = strtolower($matches[1]);
+        continue;
+    }
+    if (str_starts_with($argument, '-') && '-' !== $argument) {
+        fail(sprintf('Unknown option "%s". Try --help.', ControlCharacters::escape($argument)));
+    }
+    if (null !== $file) {
+        fail('Only one input file is supported.');
+    }
+    $file = $argument;
+}
+
+$ansi ??= function_exists('stream_isatty') && @stream_isatty(STDOUT);
+
+$source = null === $file || '-' === $file ? 'php://stdin' : $file;
+$dot = @file_get_contents($source);
+if (false === $dot) {
+    fail(sprintf('Cannot read input from "%s".', ControlCharacters::escape($source)));
+}
+if ('' === trim($dot)) {
+    fail('Empty input. Pipe a DOT file or pass a file path. Try --help.');
+}
+
+$parser = new DotParser();
+try {
+    $graph = $parser->parse($dot);
+} catch (InvalidArgumentException $exception) {
+    fail('DOT parse error: '.$exception->getMessage());
+}
+
+$flowDirection = match ($direction) {
+    'lr' => FlowDirection::LeftToRight,
+    'tb' => FlowDirection::TopToBottom,
+    default => $parser->flowDirection(),
+};
+
+$builder = AsciiDag::builder();
+if (null !== $quality) {
+    $builder->quality($quality);
+}
+if (null !== $nodeSpacing) {
+    $builder->nodeSpacing($nodeSpacing);
+}
+if (null !== $rankSpacing) {
+    $builder->rankSpacing($rankSpacing);
+}
+if (FlowDirection::LeftToRight === $flowDirection) {
+    $builder->leftToRight();
+}
+if ($asciiGlyphs) {
+    $builder->asciiGlyphs();
+}
+if ($ansi) {
+    $builder->ansi();
+}
+
+echo $builder->build()->render($graph), PHP_EOL;

@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ['8.2', '8.3', '8.4', '8.5']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          extensions: mbstring
+          coverage: none
+
+      - uses: ramsey/composer-install@v3
+
+      - name: Validate package metadata
+        run: composer validate --strict
+
+      - name: Security audit
+        if: matrix.php-version == '8.2'
+        run: composer audit
+
+      - name: Code style
+        run: composer cs-check
+        env:
+          PHP_CS_FIXER_IGNORE_ENV: '1'
+
+      - name: PHPStan
+        run: composer phpstan
+
+      - name: Psalm
+        run: composer psalm
+
+      - name: Tests
+        run: composer test
+
+  mutation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring
+          coverage: xdebug
+
+      - uses: ramsey/composer-install@v3
+
+      - name: Infection
+        run: ./vendor/bin/infection --threads=max --no-progress

@@ -1,0 +1,71 @@
+{
+    "name": "wazum/php-dag",
+    "description": "Render directed acyclic graphs (DAGs) as ASCII art using the Sugiyama algorithm",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "dag",
+        "graph",
+        "ascii",
+        "ascii-art",
+        "diagram",
+        "sugiyama",
+        "visualization",
+        "terminal",
+        "cli"
+    ],
+    "authors": [
+        {
+            "name": "Wolfgang Klinger",
+            "email": "wolfgang@wazum.com"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/wazum/php-dag/issues",
+        "source": "https://github.com/wazum/php-dag"
+    },
+    "require": {
+        "php": "^8.2",
+        "ext-mbstring": "*"
+    },
+    "require-dev": {
+        "friendsofphp/php-cs-fixer": "^3.0",
+        "infection/infection": "^0.32.5",
+        "phpstan/phpstan": "^2.0",
+        "phpunit/phpunit": "^11.0",
+        "vimeo/psalm": "^6.0"
+    },
+    "bin": [
+        "bin/php-dag"
+    ],
+    "autoload": {
+        "psr-4": {
+            "PhpDag\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "PhpDag\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "./vendor/bin/phpunit tests/",
+        "phpstan": "./vendor/bin/phpstan analyse src/ tests/ --level=max",
+        "psalm": "./vendor/bin/psalm --no-cache",
+        "cs-fix": "./vendor/bin/php-cs-fixer fix",
+        "cs-check": "./vendor/bin/php-cs-fixer fix --dry-run --diff",
+        "qa": [
+            "@cs-check",
+            "@phpstan",
+            "@psalm",
+            "@test"
+        ]
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "php-cs-fixer/shim": false,
+            "infection/extension-installer": true
+        }
+    }
+}
