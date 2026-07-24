@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2026-07-24
+
+### Fixed
+
+- Group ids now round-trip through `toDot()`/`fromDot()`. Ordinary ids are no longer prefixed with `cluster_`, and groups whose names would otherwise collide under that prefix (e.g. `foo` and `cluster_foo`) stay distinct.
+
+### Documentation
+
+- Clarified that `toDot()` is a Graphviz visualization export, not a lossless serializer: nodes, edges, edge labels, stroke styles, and groups round-trip; colors, node styles, edge weights, `minLength`, badges, and label positions do not.
+
 ## [1.0.1] - 2026-07-24
 
 ### Fixed
