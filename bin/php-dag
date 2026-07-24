@@ -54,8 +54,10 @@ $nodeSpacing = null;
 $rankSpacing = null;
 $quality = null;
 
+// $argv is defined under the CLI SAPI (register_argc_argv); the ?? guard keeps
+// static analysis happy across PHP versions that treat it as possibly-undefined.
 /** @var list<string> $arguments */
-$arguments = array_slice($argv, 1);
+$arguments = array_slice($argv ?? [], 1);
 foreach ($arguments as $argument) {
     if ('-h' === $argument || '--help' === $argument) {
         echo USAGE.PHP_EOL;
