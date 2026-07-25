@@ -6,16 +6,19 @@ namespace PhpDag\Tests\Layout;
 
 use PhpDag\Graph\Edge;
 use PhpDag\Graph\Graph;
+use PhpDag\Graph\Label;
 use PhpDag\Graph\Node;
 use PhpDag\Layout\BrandesKopfPositioning;
 use PhpDag\Layout\ChainAwareRouting;
 use PhpDag\Layout\DummyLayoutNode;
 use PhpDag\Layout\DummyNodeInserter;
 use PhpDag\Layout\EdgeRouting;
+use PhpDag\Layout\LabelReserver;
 use PhpDag\Layout\LayoutEdge;
 use PhpDag\Layout\LayoutGraph;
 use PhpDag\Layout\LongestPathLayering;
 use PhpDag\Layout\RealLayoutNode;
+use PhpDag\Render\Waypoint;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -220,6 +223,118 @@ final class ChainAwareRoutingTest extends TestCase
     }
 
     #[Test]
+    public function bendsChainAwayFromAColumnReservedForAnotherEdgesLabel(): void
+    {
+        $graph = new LayoutGraph();
+
+        $sourceNode = new RealLayoutNode('X', new Node('X', 'X'));
+        $sourceNode->layer = 0;
+        $sourceNode->row = 0;
+        $sourceNode->column = 0;
+        $graph->addNode($sourceNode);
+
+        $dummy = new DummyLayoutNode('__dummy_X_Y_1', 'X', 'Y');
+        $dummy->layer = 1;
+        $dummy->row = 5;
+        $dummy->column = 2;
+        $graph->addNode($dummy);
+
+        $targetNode = new RealLayoutNode('Y', new Node('Y', 'Y'));
+        $targetNode->layer = 2;
+        $targetNode->row = 10;
+        $targetNode->column = 0;
+        $graph->addNode($targetNode);
+
+        $graph->addEdge(new LayoutEdge(edge: new Edge('X', '__dummy_X_Y_1')));
+        $graph->addEdge(new LayoutEdge(edge: new Edge('__dummy_X_Y_1', 'Y')));
+        $graph->buildLayerIndex();
+
+        $sourceCenter = $sourceNode->column + intdiv($sourceNode->boxWidth(), 2);
+        $graph->reserveLabelSpan($dummy->layer, $sourceCenter - 2, $sourceCenter + 2);
+
+        (new ChainAwareRouting())->route($graph);
+
+        $firstEdge = $graph->outgoingEdges('X')[0];
+        $laneColumn = $firstEdge->waypoints[count($firstEdge->waypoints) - 1]->column;
+
+        self::assertTrue(
+            $laneColumn < $sourceCenter - 2 || $laneColumn > $sourceCenter + 2,
+            'A lane column reserved for another edge\'s label must be avoided, not routed through',
+        );
+    }
+
+    #[Test]
+    public function corridorChainClaimsItsLaneBeforeAnAlreadyQueuedUnlabeledChainCanSquatOnIt(): void
+    {
+        $graph = new LayoutGraph();
+
+        // Node insertion order matters here: the unlabeled X->Y dummy is added
+        // before the corridor S->T dummy, so without the corridor-first sort
+        // reconstructChains would route X->Y first and claim column 7 (its
+        // natural exit column) before the corridor ever reserves it.
+        $unlabeledSource = new RealLayoutNode('X', new Node('X', 'X'));
+        $unlabeledSource->layer = 0;
+        $unlabeledSource->row = 0;
+        $unlabeledSource->column = 5;
+        $graph->addNode($unlabeledSource);
+
+        $unlabeledDummy = new DummyLayoutNode('__dummy_X_Y_1', 'X', 'Y');
+        $unlabeledDummy->layer = 1;
+        $unlabeledDummy->row = 5;
+        $unlabeledDummy->column = 7;
+        $graph->addNode($unlabeledDummy);
+
+        $unlabeledTarget = new RealLayoutNode('Y', new Node('Y', 'Y'));
+        $unlabeledTarget->layer = 2;
+        $unlabeledTarget->row = 10;
+        $unlabeledTarget->column = 5;
+        $graph->addNode($unlabeledTarget);
+
+        $corridorSource = new RealLayoutNode('S', new Node('S', 'S'));
+        $corridorSource->layer = 0;
+        $corridorSource->row = 0;
+        $corridorSource->column = 20;
+        $graph->addNode($corridorSource);
+
+        $corridorDummy = new DummyLayoutNode('__dummy_S_T_1', 'S', 'T');
+        $corridorDummy->layer = 1;
+        $corridorDummy->row = 5;
+        $corridorDummy->column = 0;
+        $corridorDummy->corridorWidth = 15;
+        $graph->addNode($corridorDummy);
+
+        $corridorTarget = new RealLayoutNode('T', new Node('T', 'T'));
+        $corridorTarget->layer = 2;
+        $corridorTarget->row = 10;
+        $corridorTarget->column = 20;
+        $graph->addNode($corridorTarget);
+
+        $graph->addEdge(new LayoutEdge(edge: new Edge('X', '__dummy_X_Y_1')));
+        $graph->addEdge(new LayoutEdge(edge: new Edge('__dummy_X_Y_1', 'Y')));
+        $graph->addEdge(new LayoutEdge(edge: new Edge('S', '__dummy_S_T_1')));
+        $graph->addEdge(new LayoutEdge(edge: new Edge('__dummy_S_T_1', 'T')));
+        $graph->buildLayerIndex();
+
+        (new ChainAwareRouting())->route($graph);
+
+        $corridorLaneColumn = $corridorDummy->column + intdiv($corridorDummy->boxWidth(), 2);
+
+        $corridorFirstEdge = $graph->outgoingEdges('S')[0];
+        self::assertSame(
+            $corridorLaneColumn,
+            $corridorFirstEdge->waypoints[count($corridorFirstEdge->waypoints) - 1]->column,
+            'The corridor chain must reach its fixed lane column',
+        );
+
+        $unlabeledFirstEdge = $graph->outgoingEdges('X')[0];
+        self::assertNotSame(
+            $corridorLaneColumn,
+            $unlabeledFirstEdge->waypoints[count($unlabeledFirstEdge->waypoints) - 1]->column,
+            'An unlabeled chain queued before the corridor chain must not claim the corridor lane',
+        );
+    }
+
+    #[Test]
     public function routesChainCorrectlyRegardlessOfEdgeInsertionOrder(): void
     {
         $graph = new LayoutGraph();
@@ -326,6 +441,106 @@ final class ChainAwareRoutingTest extends TestCase
         foreach ($graph->edges() as $edge) {
             self::assertNotEmpty($edge->waypoints, sprintf('Edge %s→%s has no waypoints', $edge->sourceId(), $edge->targetId()));
         }
+    }
+
+    #[Test]
+    public function labeledChainKeepsItsCorridorLaneExclusive(): void
+    {
+        $this->assertCorridorLaneIsExclusive(labeledFirst: true);
+    }
+
+    #[Test]
+    public function labeledChainKeepsItsCorridorLaneExclusiveWhenRoutedAfterTheTrunk(): void
+    {
+        $this->assertCorridorLaneIsExclusive(labeledFirst: false);
+    }
+
+    private function assertCorridorLaneIsExclusive(bool $labeledFirst): void
+    {
+        $graph = new Graph();
+        foreach (['A', 'B', 'C', 'D'] as $id) {
+            $graph->addNode(new Node($id, $id));
+        }
+        $graph->addEdge(new Edge('A', 'B'));
+        $graph->addEdge(new Edge('B', 'C'));
+        $graph->addEdge(new Edge('C', 'D'));
+        $labeled = new Edge('A', 'D', label: new Label('wide-label-99'));
+        $unlabeled = new Edge('B', 'D');
+        foreach ($labeledFirst ? [$labeled, $unlabeled] : [$unlabeled, $labeled] as $edge) {
+            $graph->addEdge($edge);
+        }
+
+        $layoutGraph = LayoutGraph::fromGraph($graph);
+        foreach ((new LongestPathLayering())->assign($layoutGraph) as $id => $layer) {
+            $layoutGraph->getLayoutNode($id)->layer = $layer;
+        }
+        $layoutGraph->buildLayerIndex();
+        (new DummyNodeInserter())->process($layoutGraph);
+        (new BrandesKopfPositioning())->position($layoutGraph);
+        (new LabelReserver())->process($layoutGraph);
+        (new ChainAwareRouting())->route($layoutGraph);
+
+        $corridorDummy = null;
+        foreach ($layoutGraph->nodeIds() as $nodeId) {
+            $node = $layoutGraph->getLayoutNode($nodeId);
+            if ($node instanceof DummyLayoutNode && $node->corridorWidth > 0) {
+                $corridorDummy = $node;
+            }
+        }
+        self::assertNotNull($corridorDummy);
+        $laneColumn = $corridorDummy->column + intdiv($corridorDummy->boxWidth(), 2);
+
+        $laneIntervals = [];
+        foreach ($layoutGraph->edges() as $edge) {
+            $targetNode = $layoutGraph->getLayoutNode($edge->targetId());
+            // The loose string matcher from the brief also flags the terminal
+            // hop into the real target D, whose column the corridor never
+            // controls (it reuses the ordinary real-target alignment, shared
+            // with every other edge converging on D). Match on the dummy
+            // chain's identity instead, which naturally excludes that hop.
+            $isLabeledChain = $targetNode instanceof DummyLayoutNode && $targetNode->identityKey() === $corridorDummy->identityKey();
+            foreach ($this->verticalIntervals($edge->waypoints) as [$column, $fromRow, $toRow]) {
+                $laneIntervals[] = [$isLabeledChain, $column, $fromRow, $toRow];
+            }
+        }
+
+        $corridorIntervals = array_filter($laneIntervals, static fn (array $interval): bool => $interval[0]);
+        $otherIntervals = array_filter($laneIntervals, static fn (array $interval): bool => !$interval[0]);
+
+        self::assertNotSame([], $corridorIntervals);
+        foreach ($corridorIntervals as [, $column]) {
+            self::assertSame($laneColumn, $column, 'Every vertical run of the labeled chain must sit on the corridor lane');
+        }
+        foreach ($otherIntervals as [, $column, $fromRow, $toRow]) {
+            if ($column !== $laneColumn) {
+                continue;
+            }
+            foreach ($corridorIntervals as [, , $corridorFrom, $corridorTo]) {
+                self::assertFalse(
+                    $fromRow <= $corridorTo && $toRow >= $corridorFrom,
+                    'No other lane may overlap the corridor lane over the same rows',
+                );
+            }
+        }
+    }
+
+    /**
+     * @param list<Waypoint> $waypoints
+     *
+     * @return list<array{int, int, int}> [column, fromRow, toRow] per vertical run
+     */
+    private function verticalIntervals(array $waypoints): array
+    {
+        $intervals = [];
+        for ($index = 1, $count = count($waypoints); $index < $count; ++$index) {
+            $from = $waypoints[$index - 1];
+            $to = $waypoints[$index];
+            if ($from->column === $to->column && $from->row !== $to->row) {
+                $intervals[] = [$from->column, min($from->row, $to->row), max($from->row, $to->row)];
+            }
+        }
+
+        return $intervals;
     }
 
     /**

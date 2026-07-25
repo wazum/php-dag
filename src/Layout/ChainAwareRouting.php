@@ -14,6 +14,14 @@ final readonly class ChainAwareRouting implements EdgeRouting
         $layerMaxHeights = $this->computeLayerMaxHeights($graph);
         $groupEntryCeilings = $this->groupEntryCeilings($graph);
         $chains = $this->reconstructChains($graph);
+        usort(
+            $chains,
+            /**
+             * @param array{string, string, list<LayoutEdge>} $left
+             * @param array{string, string, list<LayoutEdge>} $right
+             */
+            fn (array $left, array $right): int => (null === $this->corridorLaneColumn($graph, $left[2])) <=> (null === $this->corridorLaneColumn($graph, $right[2])),
+        );
 
         /** @var SplObjectStorage<LayoutEdge, true> */
         $routedEdges = new SplObjectStorage();
@@ -133,6 +141,19 @@ final readonly class ChainAwareRouting implements EdgeRouting
         return $ceilings;
     }
 
+    /** @param list<LayoutEdge> $chainEdges */
+    private function corridorLaneColumn(LayoutGraph $graph, array $chainEdges): ?int
+    {
+        foreach ($chainEdges as $edge) {
+            $target = $graph->getLayoutNode($edge->targetId());
+            if ($target instanceof DummyLayoutNode && $target->corridorWidth > 0) {
+                return $target->column + intdiv($target->boxWidth(), 2);
+            }
+        }
+
+        return null;
+    }
+
     /**
      * @return list<array{string, string, list<LayoutEdge>}>
      */
@@ -193,6 +214,8 @@ final readonly class ChainAwareRouting implements EdgeRouting
      */
     private function routeChain(LayoutGraph $graph, string $chainSourceId, string $chainTargetId, array $chainEdges, array $layerMaxHeights, array $groupEntryCeilings, array &$preferredColumns, array &$laneColumns, array &$targetLanes, array &$sourceLanes): void
     {
+        $corridorLaneColumn = $this->corridorLaneColumn($graph, $chainEdges);
+
         foreach ($chainEdges as $edge) {
             $sourceNode = $graph->getLayoutNode($edge->sourceId());
             $targetNode = $graph->getLayoutNode($edge->targetId());
@@ -208,6 +231,14 @@ final readonly class ChainAwareRouting implements EdgeRouting
                 /** @infection-ignore-all only consumed when the real target later sources another chain; first or last aligned column is a valid exit that the connection gap-fill renders equivalently */
                 $preferredColumns[$targetNode->id] ??= $targetColumn;
                 /** @infection-ignore-all a real target is always the final chain edge; continue and break leave the loop identically */
+                continue;
+            }
+
+            if (null !== $corridorLaneColumn) {
+                $laneColumns[$targetNode->layer][] = $corridorLaneColumn;
+                /** @infection-ignore-all each node in a chain is visited exactly once; ??= and = are equivalent */
+                $preferredColumns[$targetNode->id] ??= $corridorLaneColumn;
+                $this->routeDirectEdge($edge, $exitRow, $exitColumn, $entryRow, $corridorLaneColumn, $groupEntryCeilings[$targetNode->id] ?? null);
                 continue;
             }
 
