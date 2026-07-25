@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace PhpDag\Layout;
 
 use PhpDag\Graph\Edge;
+use PhpDag\Graph\LabelPosition;
 
 final readonly class DummyNodeInserter implements Processor
 {
@@ -52,6 +53,11 @@ final readonly class DummyNodeInserter implements Processor
         $sourceLayer = $graph->getLayoutNode($edge->sourceId())->layer;
         $targetLayer = $graph->getLayoutNode($edge->targetId())->layer;
 
+        $label = $edge->edge->label;
+        $labelLayer = null !== $label && LabelPosition::Middle === $label->position
+            ? intdiv($sourceLayer + $targetLayer, 2)
+            : null;
+
         $identity = $edge->identityKey();
         $previousId = $edge->sourceId();
         $chainEdges = [];
@@ -59,6 +65,9 @@ final readonly class DummyNodeInserter implements Processor
             $dummyId = $this->uniqueId($graph, sprintf('__dummy_%s_%d', $identity, $layer));
             $dummy = new DummyLayoutNode($dummyId, $edge->sourceId(), $edge->targetId(), $edge->edge, $edge->reversed, $identity);
             $dummy->layer = $layer;
+            if (null !== $label && $layer === $labelLayer) {
+                $dummy->corridorWidth = $label->width() + 2;
+            }
             $graph->addNode($dummy);
             $chainEdges[] = new LayoutEdge(edge: new Edge($previousId, $dummyId, edgeStrokeStyle: $edge->edge->edgeStrokeStyle));
             $previousId = $dummyId;

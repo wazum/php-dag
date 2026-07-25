@@ -9,6 +9,7 @@ use PhpDag\Graph\Edge;
 final class DummyLayoutNode extends LayoutNode
 {
     public readonly Edge $originalEdge;
+    public int $corridorWidth = 0;
 
     public function __construct(
         string $id,
@@ -31,7 +32,7 @@ final class DummyLayoutNode extends LayoutNode
 
     public function boxWidth(): int
     {
-        return 1;
+        return max(1, $this->corridorWidth);
     }
 
     protected function naturalBoxHeight(): int

@@ -6,6 +6,8 @@ namespace PhpDag\Tests\Layout;
 
 use PhpDag\Graph\Edge;
 use PhpDag\Graph\Graph;
+use PhpDag\Graph\Label;
+use PhpDag\Graph\LabelPosition;
 use PhpDag\Graph\Node;
 use PhpDag\Layout\DummyLayoutNode;
 use PhpDag\Layout\DummyNodeInserter;
@@ -185,6 +187,55 @@ final class DummyNodeInserterTest extends TestCase
         $elapsedMilliseconds = (hrtime(true) - $start) / 1_000_000;
 
         self::assertLessThan(250.0, $elapsedMilliseconds, sprintf('Long-edge expansion took %.1f ms', $elapsedMilliseconds));
+    }
+
+    #[Test]
+    public function widensTheLabelLayerDummyOfALongMiddleLabeledEdge(): void
+    {
+        $graph = new Graph();
+        foreach (['A', 'B', 'C', 'D'] as $id) {
+            $graph->addNode(new Node($id, $id));
+        }
+        $graph->addEdge(new Edge('A', 'B'));
+        $graph->addEdge(new Edge('B', 'C'));
+        $graph->addEdge(new Edge('C', 'D'));
+        $graph->addEdge(new Edge('A', 'D', label: new Label('constraint-9')));
+
+        $layoutGraph = LayoutGraph::fromGraph($graph);
+        foreach ((new LongestPathLayering())->assign($layoutGraph) as $id => $layer) {
+            $layoutGraph->getLayoutNode($id)->layer = $layer;
+        }
+        $layoutGraph->buildLayerIndex();
+
+        (new DummyNodeInserter())->process($layoutGraph);
+
+        self::assertSame(14, $layoutGraph->getLayoutNode('__dummy_A_D_1')->boxWidth(), 'labelWidth 12 + 2 flanks');
+        self::assertSame(1, $layoutGraph->getLayoutNode('__dummy_A_D_2')->boxWidth(), 'Other chain dummies stay slim');
+    }
+
+    #[Test]
+    public function leavesDummiesSlimForUnlabeledAndExplicitlyPositionedEdges(): void
+    {
+        $graph = new Graph();
+        foreach (['A', 'B', 'C', 'D'] as $id) {
+            $graph->addNode(new Node($id, $id));
+        }
+        $graph->addEdge(new Edge('A', 'B'));
+        $graph->addEdge(new Edge('B', 'C'));
+        $graph->addEdge(new Edge('C', 'D'));
+        $graph->addEdge(new Edge('A', 'C'));
+        $graph->addEdge(new Edge('B', 'D', label: new Label('tgt', LabelPosition::Target)));
+
+        $layoutGraph = LayoutGraph::fromGraph($graph);
+        foreach ((new LongestPathLayering())->assign($layoutGraph) as $id => $layer) {
+            $layoutGraph->getLayoutNode($id)->layer = $layer;
+        }
+        $layoutGraph->buildLayerIndex();
+
+        (new DummyNodeInserter())->process($layoutGraph);
+
+        self::assertSame(1, $layoutGraph->getLayoutNode('__dummy_A_C_1')->boxWidth());
+        self::assertSame(1, $layoutGraph->getLayoutNode('__dummy_B_D_2')->boxWidth());
     }
 
     /**
