@@ -6,10 +6,12 @@ namespace PhpDag\Tests\Layout;
 
 use PhpDag\Graph\Edge;
 use PhpDag\Graph\Graph;
+use PhpDag\Graph\Label;
 use PhpDag\Graph\Node;
 use PhpDag\Layout\BrandesKopfPositioning;
 use PhpDag\Layout\ChainAwareRouting;
 use PhpDag\Layout\CycleBreaker;
+use PhpDag\Layout\DummyLayoutNode;
 use PhpDag\Layout\DummyNodeInserter;
 use PhpDag\Layout\DummyNodeRemover;
 use PhpDag\Layout\LayoutGraph;
@@ -263,6 +265,88 @@ final class DummyNodeRemoverTest extends TestCase
         self::assertSame('A', $restoredEdge->sourceId());
         self::assertSame('C', $restoredEdge->targetId());
         self::assertSame(EdgeStrokeStyle::Dashed, $restoredEdge->edge->edgeStrokeStyle);
+    }
+
+    #[Test]
+    public function carriesTheCorridorLaneColumnOntoTheRestoredEdge(): void
+    {
+        $graph = new Graph();
+        foreach (['A', 'B', 'C'] as $id) {
+            $graph->addNode(new Node($id, $id));
+        }
+        $graph->addEdge(new Edge('A', 'B'));
+        $graph->addEdge(new Edge('B', 'C'));
+        $graph->addEdge(new Edge('A', 'C', label: new Label('lbl-99')));
+
+        $layoutGraph = LayoutGraph::fromGraph($graph);
+        foreach ((new LongestPathLayering())->assign($layoutGraph) as $id => $layer) {
+            $layoutGraph->getLayoutNode($id)->layer = $layer;
+        }
+        $layoutGraph->buildLayerIndex();
+        (new DummyNodeInserter())->process($layoutGraph);
+        (new BrandesKopfPositioning())->position($layoutGraph);
+
+        $corridor = $layoutGraph->getLayoutNode('__dummy_A_C_1');
+        $expectedLane = $corridor->column + intdiv($corridor->boxWidth(), 2);
+
+        (new ChainAwareRouting())->route($layoutGraph);
+        (new DummyNodeRemover())->process($layoutGraph);
+
+        $restored = null;
+        foreach ($layoutGraph->edges() as $edge) {
+            if (null !== $edge->edge->label) {
+                $restored = $edge;
+            }
+        }
+
+        self::assertNotNull($restored);
+        self::assertSame($expectedLane, $restored->labelLaneColumn);
+    }
+
+    #[Test]
+    public function carriesTheCorridorLaneColumnWhenTheCorridorDummyIsMidChain(): void
+    {
+        $graph = new Graph();
+        foreach (['A', 'B', 'C', 'D', 'E'] as $id) {
+            $graph->addNode(new Node($id, $id));
+        }
+        $graph->addEdge(new Edge('A', 'B'));
+        $graph->addEdge(new Edge('B', 'C'));
+        $graph->addEdge(new Edge('C', 'D'));
+        $graph->addEdge(new Edge('D', 'E'));
+        $graph->addEdge(new Edge('A', 'E', label: new Label('lbl-99')));
+
+        $layoutGraph = LayoutGraph::fromGraph($graph);
+        foreach ((new LongestPathLayering())->assign($layoutGraph) as $id => $layer) {
+            $layoutGraph->getLayoutNode($id)->layer = $layer;
+        }
+        $layoutGraph->buildLayerIndex();
+        (new DummyNodeInserter())->process($layoutGraph);
+        (new BrandesKopfPositioning())->position($layoutGraph);
+
+        $corridor = null;
+        foreach ($layoutGraph->nodeIds() as $nodeId) {
+            $node = $layoutGraph->getLayoutNode($nodeId);
+            if ($node instanceof DummyLayoutNode && $node->corridorWidth > 0) {
+                $corridor = $node;
+            }
+        }
+        self::assertNotNull($corridor);
+        self::assertSame(2, $corridor->layer);
+        $expectedLane = $corridor->column + intdiv($corridor->boxWidth(), 2);
+
+        (new ChainAwareRouting())->route($layoutGraph);
+        (new DummyNodeRemover())->process($layoutGraph);
+
+        $restored = null;
+        foreach ($layoutGraph->edges() as $edge) {
+            if (null !== $edge->edge->label) {
+                $restored = $edge;
+            }
+        }
+
+        self::assertNotNull($restored);
+        self::assertSame($expectedLane, $restored->labelLaneColumn);
     }
 
     /**

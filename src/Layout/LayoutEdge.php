@@ -13,6 +13,7 @@ final class LayoutEdge
     public array $waypoints = [];
     public ?EdgePort $sourcePort = null;
     public ?EdgePort $targetPort = null;
+    public ?int $labelLaneColumn = null;
 
     public function __construct(
         public readonly Edge $edge,

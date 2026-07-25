@@ -20,6 +20,7 @@ final readonly class DummyNodeRemover implements Processor
             $chainEdges = $chain['edges'];
             $restoredEdge = new LayoutEdge(edge: $chain['edge'], reversed: $chain['reversed']);
             $restoredEdge->waypoints = $this->mergeWaypoints($chainEdges);
+            $restoredEdge->labelLaneColumn = $chain['laneColumn'];
             $graph->addEdge($restoredEdge);
         }
     }
@@ -40,11 +41,11 @@ final readonly class DummyNodeRemover implements Processor
     /**
      * @param list<string> $dummyIds
      *
-     * @return array<string, array{edges: list<LayoutEdge>, edge: Edge, reversed: bool}>
+     * @return array<string, array{edges: list<LayoutEdge>, edge: Edge, reversed: bool, laneColumn: int|null}>
      */
     private function collectChainEdges(LayoutGraph $graph, array $dummyIds): array
     {
-        /** @var array<string, array{edges: list<LayoutEdge>, edge: Edge, reversed: bool}> */
+        /** @var array<string, array{edges: list<LayoutEdge>, edge: Edge, reversed: bool, laneColumn: int|null}> */
         $chainEdgesByOriginal = [];
 
         foreach ($dummyIds as $dummyId) {
@@ -57,7 +58,12 @@ final readonly class DummyNodeRemover implements Processor
                     'edges' => [],
                     'edge' => $node->originalEdge,
                     'reversed' => $node->originalEdgeReversed,
+                    'laneColumn' => null,
                 ];
+            }
+
+            if ($node->corridorWidth > 0) {
+                $chainEdgesByOriginal[$edgeKey]['laneColumn'] = $node->column + intdiv($node->boxWidth(), 2);
             }
         }
 
