@@ -179,6 +179,7 @@ final readonly class LabelReserver implements Processor
         return false;
     }
 
+    /** Must mirror DummyNodeInserter's corridor condition; reversed edges never qualify because their user-source layer sits at or above their user-target's, so the signed span is never > 1. */
     private function hasCorridor(LayoutGraph $graph, Edge $edge): bool
     {
         return LabelPosition::Middle === $edge->label?->position
