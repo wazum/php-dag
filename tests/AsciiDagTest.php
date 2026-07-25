@@ -1592,4 +1592,51 @@ final class AsciiDagTest extends TestCase
         self::assertStringNotContainsString('◀▶', $result, 'Opposite arrows must not collapse onto one shared lane');
         self::assertStringNotContainsString('┴◀╌┴', $result, 'Feedback edge must not splice into the bottom border between adjacent nodes');
     }
+
+    #[Test]
+    public function rendersDependencyWhyGraphWithTraceableConstraints(): void
+    {
+        $dot = file_get_contents(__DIR__.'/../examples/why.dot');
+        self::assertNotFalse($dot);
+
+        $result = AsciiDag::default()->render(Graph::fromDot($dot));
+
+        $expected = "                                      ╭──────────────╮\n"
+            ."                                      │ your project │\n"
+            ."                                      ╰───────┳──────╯\n"
+            ."                                              ┃\n"
+            ."      ^2.10.2 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┻───────────────┐ ^3.75\n"
+            ."              ▼                                               ▼\n"
+            ."╭─────────────┻────────────╮                   ╭──────────────┴──────────────╮\n"
+            ."│ composer/composer 2.10.2 │                   │ friendsofphp/…-fixer 3.95.1 │\n"
+            ."╰─────────────┳────────────╯                   ╰──────────────┬──────────────╯\n"
+            ."              ┃                                               │\n"
+            ."              ┃                                               │ ^1.16\n"
+            ."              ┃                                               ▼\n"
+            ."              ┃                                    ╭──────────┴──────────╮\n"
+            ."              ┃                                    │ react/socket 1.17.0 │\n"
+            ."              ┃                                    ╰──────────┬──────────╯\n"
+            ."              ┃                                               │\n"
+            ."              ┃                             ^1.13 ┌───────────┴──────────────────┐\n"
+            ."              ┃                                   ▼                              │\n"
+            ."              ┃                         ╭─────────┴────────╮                     │\n"
+            ."              ┃                         │ react/dns 1.14.0 │                     │\n"
+            ."            ^3.3                        ╰─────────┬────────╯                     │\n"
+            ."              ┃                                   │                              │\n"
+            ."              ┃                                   │                              │\n"
+            ."              ┃ ^1.0 || ^0.6 || ^0.5 ┌────────────┴───────────┐       ^3.2 || ^2.6 || ^1.2.1\n"
+            ."              ┃                      ▼                        │                  │\n"
+            ."              ┃            ╭─────────┴─────────╮              │                  │\n"
+            ."              ┃            │ react/cache 1.2.0 │              │                  │\n"
+            ."              ┃            ╰─────────┬─────────╯   ^3.2 || ^2.7 || ^1.2.1        │\n"
+            ."              ┃ ^3.0 || ^2.0 || ^1.1 │                        │                  │\n"
+            ."              ┃                      │                        │                  │\n"
+            ."              ┗━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━┳───────────┴──────────────────┘\n"
+            ."                                                  ▼\n"
+            ."                                       ╭──────────┻──────────╮\n"
+            ."                                       │ react/promise 3.3.0 │\n"
+            .'                                       ╰─────────────────────╯';
+
+        self::assertSame($expected, $result, sprintf("Every constraint must be traceable to its edge:\n%s", $result));
+    }
 }
