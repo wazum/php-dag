@@ -1,0 +1,18 @@
+digraph {
+    "<root>" [label="your project"];
+    "composer/composer" [label="composer/composer 2.10.2"];
+    "react/promise" [label="react/promise 3.3.0"];
+    "friendsofphp/php-cs-fixer" [label="friendsofphp/…-fixer 3.95.1"];
+    "react/socket" [label="react/socket 1.17.0"];
+    "react/dns" [label="react/dns 1.14.0"];
+    "react/cache" [label="react/cache 1.2.0"];
+    "<root>" -> "composer/composer" [label="^2.10.2", style=bold];
+    "composer/composer" -> "react/promise" [label="^3.3", style=bold];
+    "<root>" -> "friendsofphp/php-cs-fixer" [label="^3.75"];
+    "friendsofphp/php-cs-fixer" -> "react/socket" [label="^1.16"];
+    "react/socket" -> "react/promise" [label="^3.2 || ^2.6 || ^1.2.1"];
+    "react/socket" -> "react/dns" [label="^1.13"];
+    "react/dns" -> "react/promise" [label="^3.2 || ^2.7 || ^1.2.1"];
+    "react/dns" -> "react/cache" [label="^1.0 || ^0.6 || ^0.5"];
+    "react/cache" -> "react/promise" [label="^3.0 || ^2.0 || ^1.1"];
+}

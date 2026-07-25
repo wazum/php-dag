@@ -11,6 +11,7 @@ use PhpDag\Graph\LabelPosition;
 use PhpDag\Graph\Node;
 use PhpDag\Layout\BrandesKopfPositioning;
 use PhpDag\Layout\ChainAwareRouting;
+use PhpDag\Layout\DummyLayoutNode;
 use PhpDag\Layout\DummyNodeInserter;
 use PhpDag\Layout\DummyNodeRemover;
 use PhpDag\Layout\FlowDirection;
@@ -935,6 +936,60 @@ final class LabelRendererTest extends TestCase
             'A slot ending one column before the box left edge must be accepted');
     }
 
+    #[Test]
+    public function drawsALongEdgeLabelInlineOnItsLane(): void
+    {
+        $canvas = new Canvas();
+        $layoutGraph = $this->labeledEdgeGraph([[0, 10], [8, 10]], new Label('aa || bb'));
+        $layoutGraph->edges()[0]->labelLaneColumn = 10;
+
+        (new EdgeRenderer())->render($canvas, $layoutGraph);
+        (new LabelRenderer())->render($canvas, $layoutGraph);
+
+        self::assertSame('a', $canvas->get(4, 6)->resolvedCharacter(), 'Label centered on the lane: start = 10 - intdiv(8, 2)');
+        self::assertSame('│', $canvas->get(3, 10)->resolvedCharacter(), 'Lane continues above the label');
+        self::assertSame('│', $canvas->get(5, 10)->resolvedCharacter(), 'Lane continues below the label');
+    }
+
+    #[Test]
+    public function slidesTheInlineLabelAlongTheLaneWhenTheAnchorRowIsBlocked(): void
+    {
+        $canvas = new Canvas();
+        $layoutGraph = $this->labeledEdgeGraph([[0, 10], [8, 10]], new Label('aa || bb'));
+        $layoutGraph->edges()[0]->labelLaneColumn = 10;
+
+        (new EdgeRenderer())->render($canvas, $layoutGraph);
+        $canvas->text(4, 12, 'XXX', 10);
+        (new LabelRenderer())->render($canvas, $layoutGraph);
+
+        self::assertSame('a', $canvas->get(3, 6)->resolvedCharacter(), 'Blocked anchor row: the label slides one lane row up');
+    }
+
+    #[Test]
+    public function fallsBackToBesideTheLaneWhenNoInlineRowFits(): void
+    {
+        $canvas = new Canvas();
+        $layoutGraph = $this->labeledEdgeGraph([[0, 10], [8, 10]], new Label('yy'));
+        $layoutGraph->edges()[0]->labelLaneColumn = 10;
+        for ($row = 1; $row <= 7; ++$row) {
+            $canvas->text($row, 12, 'XXXXXXXX', 10);
+            $canvas->text($row, 5, 'XXXX', 10);
+        }
+
+        (new EdgeRenderer())->render($canvas, $layoutGraph);
+        (new LabelRenderer())->render($canvas, $layoutGraph);
+
+        $found = false;
+        for ($row = 0; $row <= 9; ++$row) {
+            for ($column = -6; $column <= 25; ++$column) {
+                if ('y' === $canvas->cellAt($row, $column)?->resolvedCharacter()) {
+                    $found = true;
+                }
+            }
+        }
+        self::assertTrue($found, 'With every inline row blocked the label must still render somewhere via the fallback');
+    }
+
     private function convergingEdgeGraph(Label $label): LayoutGraph
     {
         $layoutGraph = new LayoutGraph();
@@ -973,6 +1028,8 @@ final class LabelRendererTest extends TestCase
     private function labeledEdgeGraph(array $waypointCoordinates, Label $label): LayoutGraph
     {
         $layoutGraph = new LayoutGraph();
+        $layoutGraph->addNode(new DummyLayoutNode('source', 'source', 'target'));
+        $layoutGraph->addNode(new DummyLayoutNode('target', 'source', 'target'));
         $layoutEdge = new LayoutEdge(edge: new Edge('source', 'target', label: $label));
         $layoutEdge->waypoints = array_map(
             static fn (array $coordinates): Waypoint => new Waypoint($coordinates[0], $coordinates[1]),

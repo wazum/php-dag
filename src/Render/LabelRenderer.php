@@ -87,6 +87,16 @@ final readonly class LabelRenderer implements ElementRenderer
                 LabelPosition::Middle => intdiv($firstRow + $lastRow, 2),
             };
 
+            if (null !== $layoutEdge->labelLaneColumn) {
+                $slot = $this->inlineSlot($canvas, $boxes, $layoutEdge, $anchorRow, $labelWidth);
+                if (null !== $slot) {
+                    [$labelRow, $labelColumn] = $slot;
+                    $canvas->text($labelRow, $labelColumn, $labelText, self::Z_INDEX, $color);
+
+                    continue;
+                }
+            }
+
             // Converging edges share their bend bar with siblings, so the anchor
             // region is unusable; their labels sit beside their own edge instead,
             // as close to the source as possible, where the edges are still apart.
@@ -165,6 +175,66 @@ final readonly class LabelRenderer implements ElementRenderer
         }
 
         return $this->firstFit($canvas, $boxes, $candidates, $width);
+    }
+
+    /**
+     * @param list<array{int, int, int, int}> $boxes
+     *
+     * @return array{int, int}|null
+     */
+    private function inlineSlot(Canvas $canvas, array $boxes, LayoutEdge $edge, int $anchorRow, int $width): ?array
+    {
+        $laneColumn = $edge->labelLaneColumn;
+        if (null === $laneColumn) {
+            return null;
+        }
+
+        $start = $laneColumn - intdiv($width, 2);
+        [$minRow, $maxRow] = $this->rowSpan($edge->waypoints);
+
+        $rows = [$anchorRow];
+        for ($offset = 1; $offset <= $maxRow - $minRow; ++$offset) {
+            $rows[] = $anchorRow - $offset;
+            $rows[] = $anchorRow + $offset;
+        }
+
+        foreach ($rows as $row) {
+            if ($row <= $minRow || $row >= $maxRow) {
+                continue;
+            }
+            if ($this->inlineFits($canvas, $boxes, $row, $start, $width, $laneColumn)) {
+                return [$row, $start];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Clear except the edge's own lane cell, so the label sits ON its lane with
+     * the lane visibly continuing above and below.
+     *
+     * @param list<array{int, int, int, int}> $boxes
+     */
+    private function inlineFits(Canvas $canvas, array $boxes, int $row, int $start, int $width, int $laneColumn): bool
+    {
+        for ($column = $start - 1; $column <= $start + $width; ++$column) {
+            if ($column === $laneColumn) {
+                continue;
+            }
+            $character = $canvas->cellAt($row, $column)?->resolvedCharacter() ?? '';
+            if ('' !== $character && ' ' !== $character) {
+                return false;
+            }
+        }
+
+        foreach ($boxes as [$top, $bottom, $left, $right]) {
+            if ($row >= $top && $row <= $bottom && $start <= $right && $start + $width - 1 >= $left) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
