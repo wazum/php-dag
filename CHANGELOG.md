@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-07-25
+
+### Changed
+
+- Long labeled edges (spanning two or more layers) now keep their own lane instead of merging into a shared trunk, and their label renders in-line on the lane — every constraint in a dependency graph is traceable to its edge. Layouts with such edges get wider (label width + 2 columns per corridor) and one extra row per affected gap; unlabeled edges still share trunks.
+
 ## [1.0.3] - 2026-07-24
 
 ### Fixed
