@@ -49,11 +49,18 @@
         // The LabelRenderer walk bounds: the last walked row is the edge's entry row, where
         // both side spans always graze the target box (minimum box width 5), so its
         // candidates never fit and dropping the row changes nothing.
+        // The LabelRenderer inline-lane offset bound: the row generated at offset ==
+        // (maxRow - minRow) is always anchorRow -+ the full span, i.e. at or past minRow/maxRow,
+        // which the row guard rejects either way — the last useful offset is always
+        // (maxRow - minRow) - 1, reachable under both "<=" and "<"; excluded per mutator
+        // because the Minus mutant on the same line (maxRow - minRow -> maxRow + minRow) IS
+        // observable whenever the edge spans negative rows and is covered by a test.
         "LessThanOrEqualTo": {
             "ignoreSourceCodeByRegex": [
                 "if \\(\\$deficit <= 0\\) \\{",
                 "for \\(\\$row = min\\(\\$source->row \\+ \\$source->boxHeight\\(\\), \\$minRow\\); \\$row <= \\$maxRow; \\+\\+\\$row\\) \\{",
-                "for \\(\\$row = \\$anchorRow \\+ 1; \\$row <= \\$maxRow; \\+\\+\\$row\\) \\{"
+                "for \\(\\$row = \\$anchorRow \\+ 1; \\$row <= \\$maxRow; \\+\\+\\$row\\) \\{",
+                "for \\(\\$offset = 1; \\$offset <= \\$maxRow - \\$minRow; \\+\\+\\$offset\\) \\{"
             ]
         },
         // Widening "<" to "<=" makes the formatter loops call Canvas::get() one step past the
@@ -132,6 +139,14 @@
         "Spaceship": {
             "ignoreSourceCodeByRegex": [
                 "usort\\(\\$intervals, static fn.*"
+            ]
+        },
+        // The LabelReserver hasCorridor() null-safe operator: every call site null-guards
+        // $edge->label in the same loop iteration before calling hasCorridor, so the
+        // null-safe operator can never observe null.
+        "NullSafePropertyCall": {
+            "ignoreSourceCodeByRegex": [
+                "return LabelPosition::Middle === \\$edge->label\\?->position"
             ]
         },
         // The chain accumulator's "edges" entry is redundant: every dummy id in the chain has

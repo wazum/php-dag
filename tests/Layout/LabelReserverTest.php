@@ -193,6 +193,29 @@ final class LabelReserverTest extends TestCase
     }
 
     #[Test]
+    public function laterClaimsUseTheBoundCenterAlreadyShiftedByAnEarlierWiderChannel(): void
+    {
+        // s1's wide label widens the gap between bound 0 and bound 1, shifting the
+        // centers of every later bound (s2, s3). s2's own claim must read that
+        // already-shifted center, not the original one.
+        $graph = new LayoutGraph();
+        $this->placedNode($graph, 's1', layer: 0, column: 0);
+        $this->placedNode($graph, 's2', layer: 0, column: 8);
+        $this->placedNode($graph, 's3', layer: 0, column: 16);
+        $this->placedNode($graph, 'T', layer: 1, column: 8, row: 6);
+
+        $this->connectLabeled($graph, 's1', 'T', 'wide-99.99');
+        $this->connectLabeled($graph, 's2', 'T', 'bb');
+        $this->connectLabeled($graph, 's3', 'T', null);
+        $graph->buildLayerIndex();
+
+        (new LabelReserver())->process($graph);
+
+        self::assertSame([[3, 14], [16, 19]], $graph->reservedLabelSpans(0),
+            "s2's span [16, 19] reflects its bound center after the +5 shift from s1's widening; using the pre-shift center would misplace it");
+    }
+
+    #[Test]
     public function recordsNoSpanForExplicitlyPositionedLabels(): void
     {
         $graph = new LayoutGraph();
@@ -306,6 +329,7 @@ final class LabelReserverTest extends TestCase
 
         self::assertSame([[10, 17]], $graph->reservedLabelSpans(0), 'The lane crosses the first gap too — its corridor columns are reserved there');
         self::assertSame([[10, 17]], $graph->reservedLabelSpans(1), 'The corridor columns are off-limits to other lanes in the gap below the dummy');
+        self::assertSame([], $graph->reservedLabelSpans(2), 'The gap loop stops before the target layer — no span is reserved past the corridor');
     }
 
     #[Test]
@@ -347,6 +371,61 @@ final class LabelReserverTest extends TestCase
         self::assertSame(0, $wideLeft->column);
         self::assertSame(14, $rightNeighbor->column, 'No legacy side-reservation shift for a corridor-backed label');
         self::assertSame(20, $target->column);
+    }
+
+    #[Test]
+    public function corridorSkipInHorizontalReservationDoesNotAbortLaterConflicts(): void
+    {
+        // A corridor-backed labeled edge is processed first and must be skipped
+        // (continue), not stop the whole scan (break) before the next labeled
+        // edge's real column conflict is ever handled.
+        $graph = new LayoutGraph();
+
+        $far = new RealLayoutNode('Far', new Node('Far', 'Far'));
+        $far->layer = 0;
+        $far->row = 0;
+        $far->column = 0;
+        $graph->addNode($far);
+
+        $farTarget = new RealLayoutNode('FarTarget', new Node('FarTarget', 'FarTarget'));
+        $farTarget->layer = 2;
+        $farTarget->row = 10;
+        $farTarget->column = 0;
+        $graph->addNode($farTarget);
+
+        $corridorEdge = new Edge('Far', 'FarTarget', label: new Label('corridor', LabelPosition::Middle));
+        $graph->addEdge(new LayoutEdge(edge: $corridorEdge));
+        $graph->storeOriginalEdge($corridorEdge);
+
+        $nodeA = new RealLayoutNode('A', new Node('A', 'A'));
+        $nodeA->layer = 0;
+        $nodeA->row = 0;
+        $nodeA->column = 10;
+        $graph->addNode($nodeA);
+
+        $nodeB = new RealLayoutNode('B', new Node('B', 'VeryWideBoxHere'));
+        $nodeB->layer = 1;
+        $nodeB->row = 5;
+        $nodeB->column = 0;
+        $graph->addNode($nodeB);
+
+        $nodeC = new RealLayoutNode('C', new Node('C', 'C'));
+        $nodeC->layer = 1;
+        $nodeC->row = 5;
+        $nodeC->column = 14;
+        $graph->addNode($nodeC);
+
+        $labeledEdge = new Edge('A', 'C', label: new Label('mytag'));
+        $graph->addEdge(new LayoutEdge(edge: new Edge('A', 'B')));
+        $graph->addEdge(new LayoutEdge(edge: $labeledEdge));
+        $graph->storeOriginalEdge(new Edge('A', 'B'));
+        $graph->storeOriginalEdge($labeledEdge);
+        $graph->buildLayerIndex();
+
+        (new LabelReserver())->process($graph);
+
+        self::assertSame(0, $nodeB->column, 'B is left of edge center — must not shift');
+        self::assertSame(35, $nodeC->column, 'C must still shift for the real conflict — the earlier corridor-backed edge must not abort the scan');
     }
 
     private function placedNode(LayoutGraph $graph, string $id, int $layer, int $column, int $row = 0): RealLayoutNode

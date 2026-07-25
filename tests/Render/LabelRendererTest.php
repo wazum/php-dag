@@ -966,6 +966,233 @@ final class LabelRendererTest extends TestCase
     }
 
     #[Test]
+    public function findsAFreeInlineRowFarFromTheAnchorWhenTheEdgeSpansNegativeRows(): void
+    {
+        $canvas = new Canvas();
+        $layoutGraph = $this->labeledEdgeGraph([[-3, 10], [5, 10]], new Label('aa || bb'));
+        $layoutGraph->edges()[0]->labelLaneColumn = 10;
+
+        (new EdgeRenderer())->render($canvas, $layoutGraph);
+        foreach ([1, 0, 2, -1, 3] as $row) {
+            $canvas->text($row, 5, 'XXXXXXXXXX', 10);
+        }
+        (new LabelRenderer())->render($canvas, $layoutGraph);
+
+        self::assertSame('a', $canvas->get(-2, 6)->resolvedCharacter(),
+            'The offset walk must cover the full negative-to-positive row span, not just maxRow - minRow columns worth of rows below the anchor');
+    }
+
+    #[Test]
+    public function prefersTheRowBelowTheAnchorWhenTheAnchorAndTheRowAboveAreBothBlocked(): void
+    {
+        $canvas = new Canvas();
+        $layoutGraph = $this->labeledEdgeGraph([[0, 10], [8, 10]], new Label('aa || bb'));
+        $layoutGraph->edges()[0]->labelLaneColumn = 10;
+
+        (new EdgeRenderer())->render($canvas, $layoutGraph);
+        $canvas->text(4, 5, 'XXXXXXXXXX', 10);
+        $canvas->text(3, 5, 'XXXXXXXXXX', 10);
+        (new LabelRenderer())->render($canvas, $layoutGraph);
+
+        self::assertSame('a', $canvas->get(5, 6)->resolvedCharacter(),
+            'With the anchor row and the row above it blocked, the walk must still reach anchorRow + 1');
+    }
+
+    #[Test]
+    public function excludesTheSourceExitRowItselfFromInlineCandidates(): void
+    {
+        $canvas = new Canvas();
+        $layoutGraph = $this->labeledEdgeGraph([[0, 10], [8, 10]], new Label('aa || bb', LabelPosition::Source));
+        $layoutGraph->edges()[0]->labelLaneColumn = 10;
+
+        (new EdgeRenderer())->render($canvas, $layoutGraph);
+        $canvas->text(1, 5, 'XXXXXXXXXX', 10);
+        (new LabelRenderer())->render($canvas, $layoutGraph);
+
+        self::assertSame('a', $canvas->get(2, 6)->resolvedCharacter(),
+            'Row 0 (minRow) is otherwise free but must be excluded; the label must land on row 2, not row 0');
+    }
+
+    #[Test]
+    public function excludesTheTargetEntryRowItselfFromInlineCandidates(): void
+    {
+        $canvas = new Canvas();
+        $layoutGraph = $this->labeledEdgeGraph([[0, 10], [8, 10]], new Label('aa || bb', LabelPosition::Target));
+        $layoutGraph->edges()[0]->labelLaneColumn = 10;
+
+        (new EdgeRenderer())->render($canvas, $layoutGraph);
+        $canvas->text(7, 5, 'XXXXXXXXXX', 10);
+        $canvas->text(6, 5, 'XXXXXXXXXX', 10);
+        (new LabelRenderer())->render($canvas, $layoutGraph);
+
+        self::assertSame('a', $canvas->get(5, 6)->resolvedCharacter(),
+            'Row 8 (maxRow) is otherwise free but must be excluded; the label must land on row 5, not row 8');
+    }
+
+    #[Test]
+    public function rejectsAnInlineSlotWhoseLeftMarginCellIsOccupied(): void
+    {
+        $canvas = new Canvas();
+        $layoutGraph = $this->labeledEdgeGraph([[0, 10], [8, 10]], new Label('aa || bb'));
+        $layoutGraph->edges()[0]->labelLaneColumn = 10;
+
+        (new EdgeRenderer())->render($canvas, $layoutGraph);
+        $canvas->putCharacter(4, 5, 'X', 10);
+        (new LabelRenderer())->render($canvas, $layoutGraph);
+
+        self::assertSame('a', $canvas->get(3, 6)->resolvedCharacter(),
+            'Column start - 1 (the left margin) must be checked; an occupied margin must reject the anchor row');
+    }
+
+    #[Test]
+    public function acceptsAnInlineSlotWhenOnlyTheCellTwoBeforeItIsOccupied(): void
+    {
+        $canvas = new Canvas();
+        $layoutGraph = $this->labeledEdgeGraph([[0, 10], [8, 10]], new Label('aa || bb'));
+        $layoutGraph->edges()[0]->labelLaneColumn = 10;
+
+        (new EdgeRenderer())->render($canvas, $layoutGraph);
+        $canvas->putCharacter(4, 4, 'X', 10);
+        (new LabelRenderer())->render($canvas, $layoutGraph);
+
+        self::assertSame('a', $canvas->get(4, 6)->resolvedCharacter(),
+            'Column start - 2 is outside the scanned margin; occupying it must not reject the anchor row');
+    }
+
+    #[Test]
+    public function rejectsAnInlineSlotWhoseFirstColumnIsOccupied(): void
+    {
+        $canvas = new Canvas();
+        $layoutGraph = $this->labeledEdgeGraph([[0, 10], [8, 10]], new Label('aa || bb'));
+        $layoutGraph->edges()[0]->labelLaneColumn = 10;
+
+        (new EdgeRenderer())->render($canvas, $layoutGraph);
+        $canvas->putCharacter(4, 6, 'X', 10);
+        (new LabelRenderer())->render($canvas, $layoutGraph);
+
+        self::assertSame('a', $canvas->get(3, 6)->resolvedCharacter(),
+            'Column start (the label\'s own first character) must be checked; an occupied first column must reject the anchor row');
+    }
+
+    #[Test]
+    public function rejectsAnInlineSlotWhoseRightMarginCellIsOccupied(): void
+    {
+        $canvas = new Canvas();
+        $layoutGraph = $this->labeledEdgeGraph([[0, 10], [8, 10]], new Label('aa || bb'));
+        $layoutGraph->edges()[0]->labelLaneColumn = 10;
+
+        (new EdgeRenderer())->render($canvas, $layoutGraph);
+        $canvas->putCharacter(4, 14, 'X', 10);
+        (new LabelRenderer())->render($canvas, $layoutGraph);
+
+        self::assertSame('a', $canvas->get(3, 6)->resolvedCharacter(),
+            'Column start + width (the right margin) must be checked; an occupied margin must reject the anchor row');
+    }
+
+    #[Test]
+    public function rejectsAnInlineSlotOverlappingABoxEntirely(): void
+    {
+        $canvas = new Canvas();
+        $layoutGraph = $this->labeledEdgeGraphWithBox([[0, 10], [8, 10]], new Label('aa || bb'), boxRow: 4, boxColumn: 6);
+        $layoutGraph->edges()[0]->labelLaneColumn = 10;
+
+        (new EdgeRenderer())->render($canvas, $layoutGraph);
+        (new LabelRenderer())->render($canvas, $layoutGraph);
+
+        self::assertSame('a', $canvas->get(3, 6)->resolvedCharacter(),
+            'A box squarely overlapping the anchor row and lane column must reject that row');
+    }
+
+    #[Test]
+    public function rejectsAnInlineSlotTouchingABoxTopRow(): void
+    {
+        $canvas = new Canvas();
+        $layoutGraph = $this->labeledEdgeGraphWithBox([[0, 10], [8, 10]], new Label('aa || bb'), boxRow: 4, boxColumn: 6);
+        $layoutGraph->edges()[0]->labelLaneColumn = 10;
+
+        (new EdgeRenderer())->render($canvas, $layoutGraph);
+        (new LabelRenderer())->render($canvas, $layoutGraph);
+
+        self::assertSame('a', $canvas->get(3, 6)->resolvedCharacter(),
+            'The anchor row sitting exactly on the box\'s top row must be rejected');
+    }
+
+    #[Test]
+    public function rejectsAnInlineSlotTouchingABoxBottomRow(): void
+    {
+        $canvas = new Canvas();
+        // boxHeight is 3, so boxRow 2 gives a [2, 4] band whose bottom row is the anchor (4);
+        // row 3 also falls inside that band, so the walk must reach row 5 to find a free row.
+        $layoutGraph = $this->labeledEdgeGraphWithBox([[0, 10], [8, 10]], new Label('aa || bb'), boxRow: 2, boxColumn: 6);
+        $layoutGraph->edges()[0]->labelLaneColumn = 10;
+
+        (new EdgeRenderer())->render($canvas, $layoutGraph);
+        (new LabelRenderer())->render($canvas, $layoutGraph);
+
+        self::assertSame('a', $canvas->get(5, 6)->resolvedCharacter(),
+            'The anchor row sitting exactly on the box\'s bottom row must be rejected');
+    }
+
+    #[Test]
+    public function rejectsAnInlineSlotWhenABoxEndsExactlyAtItsLeftEdge(): void
+    {
+        $canvas = new Canvas();
+        // boxWidth is 5; boxColumn 2 gives a box spanning columns [2, 6], whose right
+        // edge (6) touches start (6).
+        $layoutGraph = $this->labeledEdgeGraphWithBox([[0, 10], [8, 10]], new Label('aa || bb'), boxRow: 4, boxColumn: 2);
+        $layoutGraph->edges()[0]->labelLaneColumn = 10;
+
+        (new EdgeRenderer())->render($canvas, $layoutGraph);
+        (new LabelRenderer())->render($canvas, $layoutGraph);
+
+        self::assertSame('a', $canvas->get(3, 6)->resolvedCharacter(),
+            'A box whose right edge touches the label\'s own start column must reject the anchor row');
+    }
+
+    #[Test]
+    public function rejectsAnInlineSlotWhenABoxStartsExactlyAtItsRightEdge(): void
+    {
+        $canvas = new Canvas();
+        // start + width - 1 = 13, so boxColumn 13 touches the label's right edge.
+        $layoutGraph = $this->labeledEdgeGraphWithBox([[0, 10], [8, 10]], new Label('aa || bb'), boxRow: 4, boxColumn: 13);
+        $layoutGraph->edges()[0]->labelLaneColumn = 10;
+
+        (new EdgeRenderer())->render($canvas, $layoutGraph);
+        (new LabelRenderer())->render($canvas, $layoutGraph);
+
+        self::assertSame('a', $canvas->get(3, 6)->resolvedCharacter(),
+            'A box whose left edge touches the label\'s right edge must reject the anchor row');
+    }
+
+    #[Test]
+    public function acceptsAnInlineSlotWhenABoxStartsOneColumnPastItsRightEdge(): void
+    {
+        $canvas = new Canvas();
+        $layoutGraph = $this->labeledEdgeGraphWithBox([[0, 10], [8, 10]], new Label('aa || bb'), boxRow: 4, boxColumn: 14);
+        $layoutGraph->edges()[0]->labelLaneColumn = 10;
+
+        (new EdgeRenderer())->render($canvas, $layoutGraph);
+        (new LabelRenderer())->render($canvas, $layoutGraph);
+
+        self::assertSame('a', $canvas->get(4, 6)->resolvedCharacter(),
+            'A box starting one column past the label\'s right edge must not reject the anchor row');
+    }
+
+    #[Test]
+    public function acceptsAnInlineSlotWhenABoxStartsTwoColumnsPastItsRightEdge(): void
+    {
+        $canvas = new Canvas();
+        $layoutGraph = $this->labeledEdgeGraphWithBox([[0, 10], [8, 10]], new Label('aa || bb'), boxRow: 4, boxColumn: 15);
+        $layoutGraph->edges()[0]->labelLaneColumn = 10;
+
+        (new EdgeRenderer())->render($canvas, $layoutGraph);
+        (new LabelRenderer())->render($canvas, $layoutGraph);
+
+        self::assertSame('a', $canvas->get(4, 6)->resolvedCharacter(),
+            'A box starting two columns past the label\'s right edge must not reject the anchor row');
+    }
+
+    #[Test]
     public function fallsBackToBesideTheLaneWhenNoInlineRowFits(): void
     {
         $canvas = new Canvas();
