@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PhpDag\Layout;
 
+use PhpDag\Graph\Edge;
 use PhpDag\Graph\LabelPosition;
 
 final readonly class LabelReserver implements Processor
@@ -19,6 +20,7 @@ final readonly class LabelReserver implements Processor
         $this->widenConvergingChannels($graph);
         $this->reserveHorizontalSpace($graph);
         $this->ensureOuterLabelMargins($graph);
+        $this->reserveCorridorSpans($graph);
     }
 
     /**
@@ -177,6 +179,12 @@ final readonly class LabelReserver implements Processor
         return false;
     }
 
+    private function hasCorridor(LayoutGraph $graph, Edge $edge): bool
+    {
+        return LabelPosition::Middle === $edge->label?->position
+            && $graph->getLayoutNode($edge->targetId)->layer - $graph->getLayoutNode($edge->sourceId)->layer > 1;
+    }
+
     /** @return array<int, int> */
     private function calculateGapShifts(LayoutGraph $graph): array
     {
@@ -202,7 +210,7 @@ final readonly class LabelReserver implements Processor
             // channel and they have no rows of their own, so the labels need an
             // extra row above the bar. Longer edges keep their own channel rows.
             $convergesAdjacent = $targetInDegrees[$edge->targetId] >= 2 && 1 === $targetLayer - $sourceLayer;
-            if (LayerTransitions::hasBendingEdge($graph, $labelGap) && !$convergesAdjacent) {
+            if (LayerTransitions::hasBendingEdge($graph, $labelGap) && !$convergesAdjacent && !$this->hasCorridor($graph, $edge)) {
                 continue;
             }
 
@@ -259,6 +267,10 @@ final readonly class LabelReserver implements Processor
                 continue;
             }
 
+            if ($this->hasCorridor($graph, $edge)) {
+                continue;
+            }
+
             $sourceNode = $graph->getLayoutNode($edge->sourceId);
             $targetNode = $graph->getLayoutNode($edge->targetId);
             $sourceCenter = $sourceNode->column + intdiv($sourceNode->boxWidth(), 2);
@@ -284,6 +296,10 @@ final readonly class LabelReserver implements Processor
     {
         foreach ($graph->originalEdges() as $edge) {
             if (null === $edge->label) {
+                continue;
+            }
+
+            if ($this->hasCorridor($graph, $edge)) {
                 continue;
             }
 
@@ -337,6 +353,22 @@ final readonly class LabelReserver implements Processor
                 if ($node->column >= $edgeColumn) {
                     $node->column += $shiftAmount;
                 }
+            }
+        }
+    }
+
+    private function reserveCorridorSpans(LayoutGraph $graph): void
+    {
+        foreach ($graph->nodeIds() as $nodeId) {
+            $node = $graph->getLayoutNode($nodeId);
+            if (!$node instanceof DummyLayoutNode || 0 === $node->corridorWidth) {
+                continue;
+            }
+
+            $sourceLayer = $graph->getLayoutNode($node->originalEdgeSourceId)->layer;
+            $targetLayer = $graph->getLayoutNode($node->originalEdgeTargetId)->layer;
+            for ($gapLayer = $sourceLayer; $gapLayer < $targetLayer; ++$gapLayer) {
+                $graph->reserveLabelSpan($gapLayer, $node->column, $node->column + $node->boxWidth() - 1);
             }
         }
     }

@@ -137,7 +137,7 @@ final class LabelReserverTest extends TestCase
     }
 
     #[Test]
-    public function middlePositionLabelOnBendingGapDoesNotShiftLayers(): void
+    public function reservesARowForALongMiddleLabelEvenOnABendingGap(): void
     {
         $graph = $this->buildPositionedGraph(
             nodes: [new Node('A', 'A'), new Node('B', 'B'), new Node('C', 'C')],
@@ -148,13 +148,11 @@ final class LabelReserverTest extends TestCase
             ],
         );
 
-        $rowBBefore = $graph->getLayoutNode('B')->row;
         $rowCBefore = $graph->getLayoutNode('C')->row;
 
         (new LabelReserver())->process($graph);
 
-        self::assertSame($rowBBefore, $graph->getLayoutNode('B')->row, 'B must not shift (label is in gap 1, between layers 1 and 2)');
-        self::assertSame($rowCBefore, $graph->getLayoutNode('C')->row, 'C must not shift: gap 1 bends, so the label reuses the connector row');
+        self::assertSame($rowCBefore + 1, $graph->getLayoutNode('C')->row, 'A long Middle label now owns a corridor and needs its gap row');
     }
 
     #[Test]
@@ -284,6 +282,71 @@ final class LabelReserverTest extends TestCase
 
         self::assertNotSame([], $graph->reservedLabelSpans(0), 'The first gap must reserve its label channels');
         self::assertNotSame([], $graph->reservedLabelSpans(1), 'The second gap must reserve its label channels too');
+    }
+
+    #[Test]
+    public function reservesTheCorridorSpanOfAWidenedDummy(): void
+    {
+        $graph = new LayoutGraph();
+        $this->placedNode($graph, 'A', layer: 0, column: 0);
+        $this->placedNode($graph, 'C', layer: 2, column: 0, row: 12);
+        $this->connectLabeled($graph, 'A', 'C', 'lbl-99');
+
+        $dummy = new DummyLayoutNode('D', 'A', 'C');
+        $dummy->layer = 1;
+        $dummy->row = 6;
+        $dummy->column = 10;
+        $dummy->corridorWidth = 8;
+        $graph->addNode($dummy);
+        $graph->addEdge(new LayoutEdge(edge: new Edge('A', 'D')));
+        $graph->addEdge(new LayoutEdge(edge: new Edge('D', 'C')));
+        $graph->buildLayerIndex();
+
+        (new LabelReserver())->process($graph);
+
+        self::assertSame([[10, 17]], $graph->reservedLabelSpans(0), 'The lane crosses the first gap too — its corridor columns are reserved there');
+        self::assertSame([[10, 17]], $graph->reservedLabelSpans(1), 'The corridor columns are off-limits to other lanes in the gap below the dummy');
+    }
+
+    #[Test]
+    public function corridorEdgesSkipTheLegacyHorizontalReservation(): void
+    {
+        // Same blocked-on-both-sides geometry as shiftsNodeColumnWhenLabelDoesNotFitOnEitherSide,
+        // but the labeled edge spans two layers: it owns a corridor, so the
+        // legacy single-layer shifting must not fire (it would kink the chain).
+        // The label layer for Middle is intdiv(0 + 2, 2) + 1 = 2 — bystanders sit there.
+        $graph = new LayoutGraph();
+        $nodeA = new RealLayoutNode('A', new Node('A', 'A'));
+        $nodeA->layer = 0;
+        $nodeA->row = 0;
+        $nodeA->column = 10;
+        $graph->addNode($nodeA);
+
+        $wideLeft = new RealLayoutNode('B', new Node('B', 'VeryWideBoxHere'));
+        $wideLeft->layer = 2;
+        $wideLeft->row = 10;
+        $wideLeft->column = 0;
+        $graph->addNode($wideLeft);
+
+        $rightNeighbor = new RealLayoutNode('C', new Node('C', 'C'));
+        $rightNeighbor->layer = 2;
+        $rightNeighbor->row = 10;
+        $rightNeighbor->column = 14;
+        $graph->addNode($rightNeighbor);
+
+        $this->placedNode($graph, 'M', layer: 1, column: 10, row: 5);
+        $target = $this->placedNode($graph, 'T', layer: 2, column: 20, row: 10);
+
+        $this->connectLabeled($graph, 'A', 'M', null);
+        $this->connectLabeled($graph, 'M', 'T', null);
+        $this->connectLabeled($graph, 'A', 'T', 'mytag');
+        $graph->buildLayerIndex();
+
+        (new LabelReserver())->process($graph);
+
+        self::assertSame(0, $wideLeft->column);
+        self::assertSame(14, $rightNeighbor->column, 'No legacy side-reservation shift for a corridor-backed label');
+        self::assertSame(20, $target->column);
     }
 
     private function placedNode(LayoutGraph $graph, string $id, int $layer, int $column, int $row = 0): RealLayoutNode
