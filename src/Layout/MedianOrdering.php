@@ -127,12 +127,12 @@ final readonly class MedianOrdering implements CrossingMinimization
                     /** @infection-ignore-all accepting equal-delta swaps (or keeping a worse order) makes the swap loop oscillate forever; both mutants only hang and are detectable solely via timeout */
                     if ($crossingDifference < 0) {
                         [$nodeIds[$nodeOffset], $nodeIds[$nodeOffset + 1]] = [$nodeIds[$nodeOffset + 1], $nodeIds[$nodeOffset]];
-                        /** @psalm-suppress ArgumentTypeCoercion swapping adjacent elements preserves list structure */
-                        $graph->setLayerOrder($layers[$layerIndex], $nodeIds); // @phpstan-ignore argument.type
                         /** @infection-ignore-all single transpose pass processes all layers; reaches optimal for practical graphs */
                         $improved = true;
                     }
                 }
+                /** @psalm-suppress ArgumentTypeCoercion swapping adjacent elements preserves list structure */
+                $graph->setLayerOrder($layers[$layerIndex], $nodeIds); // @phpstan-ignore argument.type
             }
         }
     }
