@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- An edge label no longer starts on the right half of a wide character such as `漢`, which split the character.
 - With ASCII glyphs, a group border no longer cuts the edges that pass through it; the crossing is drawn as `+`.
 - CLI: run without input in a terminal, `php-dag` shows its usage instead of waiting for stdin; a directory path fails with "is not a file" instead of "Empty input".
 - Labels on the outer branches of a fan-out no longer push sibling boxes far apart; room is only made beside the lane where a label is drawn, and parents move with their children.

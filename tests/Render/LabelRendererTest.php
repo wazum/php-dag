@@ -676,6 +676,18 @@ final class LabelRendererTest extends TestCase
     }
 
     #[Test]
+    public function treatsTheRightHalfOfAWideCharacterAsOccupied(): void
+    {
+        $canvas = new Canvas();
+        $canvas->text(3, 3, '漢', 10);
+        $layoutGraph = $this->labeledEdgeGraph([[2, 0], [2, 10]], new Label('yes'));
+
+        (new LabelRenderer(FlowDirection::LeftToRight))->render($canvas, $layoutGraph);
+
+        self::assertSame('y', $canvas->get(4, 5)->resolvedCharacter(), '漢 fills columns 3 and 4, so the margin left of a label at column 5 is taken');
+    }
+
+    #[Test]
     public function overwritesLowerLayerGlyphUnderLabelBody(): void
     {
         $canvas = new Canvas();

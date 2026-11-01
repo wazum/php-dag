@@ -54,13 +54,13 @@ final readonly class LabelRenderer implements ElementRenderer
                 $canvasHeight = $canvas->height() + 1;
                 $labelRow = $edgeRow + $direction;
                 /** @infection-ignore-all Bound and guard mutations are equivalent: rows outside the canvas always read as free and end the scan at the same row, and the column-0 short-circuit is redundant because column -1 is always empty; verified by running the suite against the mutated conditions */
-                while ($labelRow >= 0 && $labelRow < $canvasHeight && !($this->regionWritable($canvas, $labelRow, $labelColumn, $labelWidth) && (0 === $labelColumn || $this->regionFree($canvas, $labelRow, $labelColumn - 1, 1)) && $this->regionFree($canvas, $labelRow, $labelColumn + $labelWidth, 1))) {
+                while ($labelRow >= 0 && $labelRow < $canvasHeight && !($this->regionWritable($canvas, $labelRow, $labelColumn, $labelWidth) && (0 === $labelColumn || $this->regionClear($canvas, $labelRow, $labelColumn - 1, 1)) && $this->regionClear($canvas, $labelRow, $labelColumn + $labelWidth, 1))) {
                     $labelRow += $direction;
                 }
                 if ($labelRow < 0 || $labelRow >= $canvasHeight) {
                     $labelRow = $edgeRow - $direction;
                     /** @infection-ignore-all Bound and guard mutations are equivalent: this rescue scan runs downward from edgeRow + 1 (never reaching row 0 or the height bound before a free row appears) and column -1 is always empty; collision behavior is pinned by the fallback* tests and verified by running the suite against the mutated conditions */
-                    while ($labelRow >= 0 && $labelRow < $canvasHeight && !($this->regionWritable($canvas, $labelRow, $labelColumn, $labelWidth) && (0 === $labelColumn || $this->regionFree($canvas, $labelRow, $labelColumn - 1, 1)) && $this->regionFree($canvas, $labelRow, $labelColumn + $labelWidth, 1))) {
+                    while ($labelRow >= 0 && $labelRow < $canvasHeight && !($this->regionWritable($canvas, $labelRow, $labelColumn, $labelWidth) && (0 === $labelColumn || $this->regionClear($canvas, $labelRow, $labelColumn - 1, 1)) && $this->regionClear($canvas, $labelRow, $labelColumn + $labelWidth, 1))) {
                         $labelRow -= $direction;
                     }
                 }
@@ -212,8 +212,7 @@ final readonly class LabelRenderer implements ElementRenderer
             if ($column === $laneColumn) {
                 continue;
             }
-            $character = $canvas->cellAt($row, $column)?->resolvedCharacter() ?? '';
-            if ('' !== $character && ' ' !== $character) {
+            if (' ' !== ($canvas->cellAt($row, $column)?->resolvedCharacter() ?? ' ')) {
                 return false;
             }
         }
@@ -327,12 +326,11 @@ final readonly class LabelRenderer implements ElementRenderer
             && !$this->overlapsBox($boxes, $row, $column, $width);
     }
 
-    /** Like regionFree, but probing without materialising cells, so the scan never widens the canvas. */
+    /** Only a blank counts as free: the right half of a wide character is taken. Probes without materialising cells, so the scan never widens the canvas. */
     private function regionClear(Canvas $canvas, int $row, int $startColumn, int $width): bool
     {
         for ($column = $startColumn; $column < $startColumn + $width; ++$column) {
-            $character = $canvas->cellAt($row, $column)?->resolvedCharacter() ?? '';
-            if ('' !== $character && ' ' !== $character) {
+            if (' ' !== ($canvas->cellAt($row, $column)?->resolvedCharacter() ?? ' ')) {
                 return false;
             }
         }
@@ -447,18 +445,6 @@ final readonly class LabelRenderer implements ElementRenderer
     {
         for ($column = $startColumn; $column < $startColumn + $width; ++$column) {
             if (!$canvas->get($row, $column)->wouldAcceptWrite(self::Z_INDEX)) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private function regionFree(Canvas $canvas, int $row, int $startColumn, int $width): bool
-    {
-        for ($column = $startColumn; $column < $startColumn + $width; ++$column) {
-            $character = $canvas->get($row, $column)->resolvedCharacter();
-            if ('' !== $character && ' ' !== $character) {
                 return false;
             }
         }
