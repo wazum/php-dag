@@ -16,7 +16,11 @@ final readonly class LabelReserver implements Processor
             return;
         }
 
-        $this->shiftLayers($graph, $this->calculateGapShifts($graph));
+        [$divergingLifts, $divergingRows] = $this->divergingLifts($graph);
+        foreach ($divergingLifts as $sourceId => $lift) {
+            $graph->reserveDivergingLift($sourceId, $lift);
+        }
+        $this->shiftLayers($graph, $this->calculateGapShifts($graph, $divergingRows));
         $this->widenConvergingChannels($graph);
         $this->reserveHorizontalSpace($graph);
         $this->ensureOuterLabelMargins($graph);
@@ -186,10 +190,85 @@ final readonly class LabelReserver implements Processor
             && $graph->getLayoutNode($edge->targetId)->layer - $graph->getLayoutNode($edge->sourceId)->layer > 1;
     }
 
-    /** @return array<int, int> */
-    private function calculateGapShifts(LayoutGraph $graph): array
+    /**
+     * @return array<string, int>
+     */
+    private function siblingBendColumns(LayoutGraph $graph, string $sourceId): array
     {
-        $gapShifts = [];
+        $bendColumns = [];
+        foreach ($graph->outgoingEdges($sourceId) as $segment) {
+            $target = $graph->getLayoutNode($segment->targetId());
+            $bendColumns[$segment->targetId()] = $target->column + intdiv($target->boxWidth(), 2);
+        }
+
+        return $bendColumns;
+    }
+
+    /** @return array{array<string, int>, array<int, int>} [lift by source id, extra rows by gap] */
+    private function divergingLifts(LayoutGraph $graph): array
+    {
+        /** @var array<int, non-empty-array<string, array{from: int, to: int}>> */
+        $barSpansByGap = [];
+        $windowRowsBySource = [];
+        foreach ($graph->originalEdges() as $edge) {
+            if (null === $edge->label) {
+                continue;
+            }
+            $source = $graph->getLayoutNode($edge->sourceId);
+            if (1 !== $graph->getLayoutNode($edge->targetId)->layer - $source->layer) {
+                continue;
+            }
+            $bendColumns = $this->siblingBendColumns($graph, $edge->sourceId);
+            if (count($bendColumns) < 2) {
+                continue;
+            }
+            $reach = $edge->label->width() + 2;
+            $span = $barSpansByGap[$source->layer][$edge->sourceId] ?? ['from' => PHP_INT_MAX, 'to' => PHP_INT_MIN];
+            $barSpansByGap[$source->layer][$edge->sourceId] = [
+                'from' => min($span['from'], min($bendColumns) - $reach),
+                'to' => max($span['to'], max($bendColumns) + $reach),
+            ];
+            $ownBendColumn = $bendColumns[$edge->targetId];
+            if ($ownBendColumn > min($bendColumns) && $ownBendColumn < max($bendColumns)) {
+                $windowRowsBySource[$edge->sourceId] = 1;
+            }
+        }
+
+        $lifts = [];
+        $rowsByGap = [];
+        foreach ($barSpansByGap as $gapLayer => $spansBySource) {
+            uasort($spansBySource, static fn (array $left, array $right): int => $left['from'] <=> $right['from']);
+            $tracks = [];
+            $gapLifts = [];
+            foreach ($spansBySource as $sourceId => $span) {
+                $takenTracks = [];
+                foreach ($tracks as $placedId => $placedTrack) {
+                    if ($spansBySource[$placedId]['to'] >= $span['from']) {
+                        $takenTracks[] = $placedTrack;
+                    }
+                }
+                $track = 0;
+                while (in_array($track, $takenTracks, true)) {
+                    ++$track;
+                }
+                $tracks[$sourceId] = $track;
+
+                $lifts[$sourceId] = $gapLifts[] = $track + ($windowRowsBySource[$sourceId] ?? 0);
+            }
+            $rowsByGap[$gapLayer] = max($gapLifts);
+        }
+
+        return [$lifts, $rowsByGap];
+    }
+
+    /**
+     * @param array<int, int> $divergingRows
+     *
+     * @return array<int, int>
+     */
+    private function calculateGapShifts(LayoutGraph $graph, array $divergingRows): array
+    {
+        $gapShifts = $divergingRows;
         $targetInDegrees = $this->targetInDegrees($graph);
 
         foreach ($graph->originalEdges() as $edge) {

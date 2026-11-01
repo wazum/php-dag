@@ -7,8 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- A fan-out whose labelled branch sits between two siblings lifts its bar one row, so the label gets its own row under the bar. Labelled fan-outs in the same gap only take separate rows when their bars and labels would collide.
+
 ### Fixed
 
+- A long edge leaving a lifted fan-out now bends on the bar row instead of crossing the label row.
+- A fan-out label beside a long-edge sibling stays next to its own edge.
 - A node with two or more parallel edge pairs (`a -> b; a -> b; a -> c; a -> c`) no longer crashes the layout with a division by zero.
 
 ## [1.1.0] - 2026-07-25

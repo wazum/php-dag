@@ -75,7 +75,7 @@ final readonly class ChainAwareRouting implements EdgeRouting
                     $targetColumn = $exitColumn;
                 }
 
-                $this->routeDirectEdge($edge, $exitRow, $exitColumn, $entryRow, $targetColumn, $groupEntryCeilings[$targetNode->id] ?? null);
+                $this->routeDirectEdge($edge, $exitRow, $exitColumn, $entryRow, $targetColumn, $groupEntryCeilings[$targetNode->id] ?? null, $graph->divergingLift($sourceNode->id));
             }
         }
     }
@@ -224,10 +224,11 @@ final readonly class ChainAwareRouting implements EdgeRouting
             /** @infection-ignore-all boxHeight() is always positive; coalesce fallback is defensive; exit row validated by integration tests */
             $exitRow = $sourceNode->row + ($layerMaxHeights[$sourceNode->layer] ?? $sourceNode->boxHeight());
             $entryRow = $targetNode->row - 1;
+            $bendLift = $graph->divergingLift($sourceNode->id);
 
             if (!$targetNode instanceof DummyLayoutNode) {
                 $targetColumn = $this->alignedTargetColumn($exitColumn, $targetNode, $graph);
-                $this->routeDirectEdge($edge, $exitRow, $exitColumn, $entryRow, $targetColumn, $groupEntryCeilings[$targetNode->id] ?? null);
+                $this->routeDirectEdge($edge, $exitRow, $exitColumn, $entryRow, $targetColumn, $groupEntryCeilings[$targetNode->id] ?? null, $bendLift);
                 /** @infection-ignore-all only consumed when the real target later sources another chain; first or last aligned column is a valid exit that the connection gap-fill renders equivalently */
                 $preferredColumns[$targetNode->id] ??= $targetColumn;
                 /** @infection-ignore-all a real target is always the final chain edge; continue and break leave the loop identically */
@@ -238,7 +239,7 @@ final readonly class ChainAwareRouting implements EdgeRouting
                 $laneColumns[$targetNode->layer][] = $corridorLaneColumn;
                 /** @infection-ignore-all each node in a chain is visited exactly once; ??= and = are equivalent */
                 $preferredColumns[$targetNode->id] ??= $corridorLaneColumn;
-                $this->routeDirectEdge($edge, $exitRow, $exitColumn, $entryRow, $corridorLaneColumn, $groupEntryCeilings[$targetNode->id] ?? null);
+                $this->routeDirectEdge($edge, $exitRow, $exitColumn, $entryRow, $corridorLaneColumn, $groupEntryCeilings[$targetNode->id] ?? null, $bendLift);
                 continue;
             }
 
@@ -254,7 +255,7 @@ final readonly class ChainAwareRouting implements EdgeRouting
                 // source (fan-out trunk) already occupies a lane in this
                 // layer: join it instead of opening a parallel one.
                 /** @infection-ignore-all verified equivalent: merged chain waypoints plus the connection gap-fill reconstruct the dropped segment */
-                $this->routeDirectEdge($edge, $exitRow, $exitColumn, $entryRow, $sharedColumn, $groupEntryCeilings[$targetNode->id] ?? null);
+                $this->routeDirectEdge($edge, $exitRow, $exitColumn, $entryRow, $sharedColumn, $groupEntryCeilings[$targetNode->id] ?? null, $bendLift);
                 /** @infection-ignore-all re-registering the already-found shared column is idempotent */
                 $targetLanes[$targetLaneKey] ??= $sharedColumn;
                 /** @infection-ignore-all re-registering the already-found shared column is idempotent */
@@ -282,7 +283,7 @@ final readonly class ChainAwareRouting implements EdgeRouting
             $laneColumns[$targetNode->layer][] = $targetColumn;
             $targetLanes[$targetLaneKey] = $targetColumn;
             $sourceLanes[$sourceLaneKey] = $targetColumn;
-            $this->routeDirectEdge($edge, $exitRow, $exitColumn, $entryRow, $targetColumn, $groupEntryCeilings[$targetNode->id] ?? null);
+            $this->routeDirectEdge($edge, $exitRow, $exitColumn, $entryRow, $targetColumn, $groupEntryCeilings[$targetNode->id] ?? null, $bendLift);
 
             /** @infection-ignore-all each node in a chain is visited exactly once; ??= and = are equivalent */
             $preferredColumns[$targetNode->id] ??= $targetColumn;
@@ -350,7 +351,7 @@ final readonly class ChainAwareRouting implements EdgeRouting
         return $targetColumn;
     }
 
-    private function routeDirectEdge(LayoutEdge $edge, int $exitRow, int $exitColumn, int $entryRow, int $targetColumn, ?int $bendCeiling = null): void
+    private function routeDirectEdge(LayoutEdge $edge, int $exitRow, int $exitColumn, int $entryRow, int $targetColumn, ?int $bendCeiling, int $bendLift): void
     {
         if ($exitColumn === $targetColumn) {
             $edge->waypoints = [new Waypoint($exitRow, $exitColumn), new Waypoint($entryRow, $exitColumn)];
@@ -358,7 +359,7 @@ final readonly class ChainAwareRouting implements EdgeRouting
             return;
         }
 
-        $bendRow = max($exitRow, $entryRow - 1);
+        $bendRow = max($exitRow, $entryRow - 1 - $bendLift);
         /** @infection-ignore-all <= is equivalent: when the ceiling equals the bend row the branch re-assigns max(exitRow, bendRow) === bendRow, leaving it unchanged */
         if (null !== $bendCeiling && $bendCeiling < $bendRow) {
             // Lift the bend above a group's top border so the vertical drop

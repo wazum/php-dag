@@ -23,6 +23,9 @@ final class LayoutGraph
     /** @var array<int, list<array{int, int}>> column spans reserved for edge labels, keyed by the gap's source layer */
     private array $reservedLabelSpans = [];
 
+    /** @var array<string, int> extra bend lift per fan-out source id */
+    private array $divergingLifts = [];
+
     /** @var array<string, list<string>> */
     private array $successorMap = [];
 
@@ -132,6 +135,17 @@ final class LayoutGraph
     public function reservedLabelSpans(int $gapLayer): array
     {
         return $this->reservedLabelSpans[$gapLayer] ?? [];
+    }
+
+    /** Rows a fan-out's bend rises by, opening a private label window below its bar. */
+    public function reserveDivergingLift(string $sourceId, int $lift): void
+    {
+        $this->divergingLifts[$sourceId] = $lift;
+    }
+
+    public function divergingLift(string $sourceId): int
+    {
+        return $this->divergingLifts[$sourceId] ?? 0;
     }
 
     public function getLayoutNode(string $nodeId): LayoutNode

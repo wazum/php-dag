@@ -66,6 +66,9 @@ final class GoldenFileTest extends TestCase
         yield 'border_styles' => ['border_styles', self::borderStyles(), $topToBottom];
         yield 'edge_styles' => ['edge_styles', self::edgeStyles(), $topToBottom];
         yield 'edge_labels' => ['edge_labels', self::edgeLabels(), $topToBottom];
+        yield 'fan_out_labels_with_long_edge' => ['fan_out_labels_with_long_edge', self::fanOutLabelsWithLongEdge(), $topToBottom];
+        yield 'fan_out_label_beside_long_edge' => ['fan_out_label_beside_long_edge', self::fanOutLabelBesideLongEdge(), $topToBottom];
+        yield 'fan_outs_side_by_side' => ['fan_outs_side_by_side', self::fanOutsSideBySide(), $topToBottom];
         yield 'highlighted_path' => ['highlighted_path', self::highlightedPath(), $topToBottom];
         yield 'cycle' => ['cycle', self::cycle(), $topToBottom];
         yield 'disconnected_components' => ['disconnected_components', self::disconnectedComponents(), $topToBottom];
@@ -418,6 +421,55 @@ final class GoldenFileTest extends TestCase
             ->addNode(new Node('reject', 'Reject'))
             ->addEdge(new Edge('review', 'approve', label: new Label('yes')))
             ->addEdge(new Edge('review', 'reject', label: new Label('no')));
+
+        return $graph;
+    }
+
+    private static function fanOutLabelsWithLongEdge(): Graph
+    {
+        $graph = new Graph();
+        $graph->addNode(new Node('a', 'a'))
+            ->addNode(new Node('b', 'b'))
+            ->addNode(new Node('c', 'c'))
+            ->addNode(new Node('d', 'd'))
+            ->addNode(new Node('e', 'e'))
+            ->addEdge(new Edge('a', 'b', label: new Label('x')))
+            ->addEdge(new Edge('a', 'c', label: new Label('y')))
+            ->addEdge(new Edge('a', 'd', label: new Label('z')))
+            ->addEdge(new Edge('a', 'e'))
+            ->addEdge(new Edge('d', 'e'));
+
+        return $graph;
+    }
+
+    private static function fanOutLabelBesideLongEdge(): Graph
+    {
+        $graph = new Graph();
+        $graph->addNode(new Node('a', 'a'))
+            ->addNode(new Node('b', 'b'))
+            ->addNode(new Node('c', 'c'))
+            ->addNode(new Node('e', 'e'))
+            ->addEdge(new Edge('a', 'b', label: new Label('x')))
+            ->addEdge(new Edge('a', 'c', label: new Label('y')))
+            ->addEdge(new Edge('a', 'e'))
+            ->addEdge(new Edge('b', 'e'));
+
+        return $graph;
+    }
+
+    private static function fanOutsSideBySide(): Graph
+    {
+        $graph = new Graph();
+        $graph->addNode(new Node('a', 'a'))
+            ->addNode(new Node('b', 'b'))
+            ->addNode(new Node('c', 'c'))
+            ->addNode(new Node('d', 'd'))
+            ->addNode(new Node('e', 'e'))
+            ->addNode(new Node('f', 'f'))
+            ->addEdge(new Edge('a', 'c', label: new Label('x')))
+            ->addEdge(new Edge('a', 'd', label: new Label('y')))
+            ->addEdge(new Edge('b', 'e', label: new Label('u')))
+            ->addEdge(new Edge('b', 'f', label: new Label('v')));
 
         return $graph;
     }

@@ -629,6 +629,340 @@ final class LabelReserverTest extends TestCase
         self::assertSame(10, $nodeB->column, 'B shifts right by the same amount');
     }
 
+    #[Test]
+    public function reservesADivergingWindowForAnInnerFanOutBranchLabel(): void
+    {
+        $graph = new LayoutGraph();
+        $source = $this->placedNode($graph, 'S', layer: 0, column: 8);
+        $this->placedNode($graph, 'L', layer: 1, column: 0, row: 6);
+        $this->placedNode($graph, 'M', layer: 1, column: 8, row: 6);
+        $this->placedNode($graph, 'R', layer: 1, column: 16, row: 6);
+
+        $this->connectLabeled($graph, 'S', 'L', null);
+        $this->connectLabeled($graph, 'S', 'M', 'inner-lbl');
+        $this->connectLabeled($graph, 'S', 'R', null);
+        $graph->buildLayerIndex();
+
+        $rowBefore = $graph->getLayoutNode('M')->row;
+        (new LabelReserver())->process($graph);
+
+        self::assertSame($rowBefore + 1, $graph->getLayoutNode('M')->row, 'The fan-out gap gains a window row');
+        self::assertSame(1, $graph->divergingLift('S'), 'The router must lift THIS source\'s diverging bends');
+        self::assertSame(8, $source->column);
+    }
+
+    #[Test]
+    public function reservesNoDivergingWindowForOuterBranchLabels(): void
+    {
+        $graph = new LayoutGraph();
+        $this->placedNode($graph, 'S', layer: 0, column: 8);
+        $this->placedNode($graph, 'L', layer: 1, column: 0, row: 6);
+        $this->placedNode($graph, 'R', layer: 1, column: 16, row: 6);
+
+        $this->connectLabeled($graph, 'S', 'L', 'left-lbl');
+        $this->connectLabeled($graph, 'S', 'R', 'right-lbl');
+        $graph->buildLayerIndex();
+
+        $rowBefore = $graph->getLayoutNode('L')->row;
+        (new LabelReserver())->process($graph);
+
+        self::assertSame(0, $graph->divergingLift('S'), 'Two-way fan-outs keep bar-end placement');
+        self::assertSame($rowBefore, $graph->getLayoutNode('L')->row);
+    }
+
+    #[Test]
+    public function liftsOnlyTheFanOutThatNeedsAWindow(): void
+    {
+        // A labeled 3-way fan-out and an unrelated 2-way diamond share the gap.
+        // Only the 3-way source may lift — the diamond must stay untouched.
+        $graph = new LayoutGraph();
+        $this->placedNode($graph, 'S', layer: 0, column: 8);
+        $this->placedNode($graph, 'D', layer: 0, column: 40);
+        $this->placedNode($graph, 'L', layer: 1, column: 0, row: 6);
+        $this->placedNode($graph, 'M', layer: 1, column: 8, row: 6);
+        $this->placedNode($graph, 'R', layer: 1, column: 16, row: 6);
+        $this->placedNode($graph, 'DL', layer: 1, column: 34, row: 6);
+        $this->placedNode($graph, 'DR', layer: 1, column: 46, row: 6);
+
+        $this->connectLabeled($graph, 'S', 'L', null);
+        $this->connectLabeled($graph, 'S', 'M', 'inner-lbl');
+        $this->connectLabeled($graph, 'S', 'R', null);
+        $this->connectLabeled($graph, 'D', 'DL', null);
+        $this->connectLabeled($graph, 'D', 'DR', null);
+        $graph->buildLayerIndex();
+
+        (new LabelReserver())->process($graph);
+
+        self::assertSame(1, $graph->divergingLift('S'), 'The labeled inner branch opens a window under its own bar');
+        self::assertSame(0, $graph->divergingLift('D'), 'The unrelated diamond in the same gap must not move');
+    }
+
+    #[Test]
+    public function staggersOverlappingBarsOfLabeledFanOutsInOneGap(): void
+    {
+        $graph = new LayoutGraph();
+        $this->placedNode($graph, 'S1', layer: 0, column: 4);
+        $this->placedNode($graph, 'S2', layer: 0, column: 20);
+        $this->placedNode($graph, 'A', layer: 1, column: 0, row: 6);
+        $this->placedNode($graph, 'B', layer: 1, column: 12, row: 6);
+        $this->placedNode($graph, 'C', layer: 1, column: 16, row: 6);
+        $this->placedNode($graph, 'D', layer: 1, column: 28, row: 6);
+
+        $this->connectLabeled($graph, 'S1', 'A', 'one');
+        $this->connectLabeled($graph, 'S1', 'B', null);
+        $this->connectLabeled($graph, 'S2', 'C', 'two');
+        $this->connectLabeled($graph, 'S2', 'D', null);
+        $graph->buildLayerIndex();
+
+        (new LabelReserver())->process($graph);
+
+        self::assertSame(0, $graph->divergingLift('S1'), 'The leftmost labeled fan-out keeps the base bar row');
+        self::assertSame(1, $graph->divergingLift('S2'), 'The next labeled fan-out lifts onto its own row');
+    }
+
+    #[Test]
+    public function usesHalfTargetWidthNotFullWidthWhenLocatingAnInnerBranch(): void
+    {
+        // L/M/R have deliberately different widths and near-touching columns so
+        // that using the full target width (instead of half) to approximate the
+        // bend column would place M outside the [L, R] window and hide it.
+        $graph = new LayoutGraph();
+        $this->placedNode($graph, 'S', layer: 0, column: 1);
+
+        $left = new RealLayoutNode('L', new Node('L', 'Wide'));
+        $left->layer = 1;
+        $left->row = 6;
+        $left->column = 0;
+        $graph->addNode($left);
+
+        $middle = new RealLayoutNode('M', new Node('M', 'Alpha'));
+        $middle->layer = 1;
+        $middle->row = 6;
+        $middle->column = 1;
+        $graph->addNode($middle);
+
+        $right = new RealLayoutNode('R', new Node('R', 'Side'));
+        $right->layer = 1;
+        $right->row = 6;
+        $right->column = 2;
+        $graph->addNode($right);
+
+        $this->connectLabeled($graph, 'S', 'L', null);
+        $this->connectLabeled($graph, 'S', 'M', 'inner-lbl');
+        $this->connectLabeled($graph, 'S', 'R', null);
+        $graph->buildLayerIndex();
+
+        (new LabelReserver())->process($graph);
+
+        self::assertSame(1, $graph->divergingLift('S'), 'M sits strictly between L and R only when the bend column uses half the target width');
+    }
+
+    #[Test]
+    public function addsRatherThanSubtractsTheHalfWidthWhenLocatingAnInnerBranch(): void
+    {
+        $graph = new LayoutGraph();
+        $this->placedNode($graph, 'S', layer: 0, column: 4);
+        $this->placedNode($graph, 'L', layer: 1, column: 0, row: 6);
+
+        $middle = new RealLayoutNode('M', new Node('M', 'Mi'));
+        $middle->layer = 1;
+        $middle->row = 6;
+        $middle->column = 1;
+        $graph->addNode($middle);
+
+        $this->placedNode($graph, 'R', layer: 1, column: 3, row: 6);
+
+        $this->connectLabeled($graph, 'S', 'L', null);
+        $this->connectLabeled($graph, 'S', 'M', 'inner-lbl');
+        $this->connectLabeled($graph, 'S', 'R', null);
+        $graph->buildLayerIndex();
+
+        (new LabelReserver())->process($graph);
+
+        self::assertSame(1, $graph->divergingLift('S'), 'The bend column must add, not subtract, the half-width offset');
+    }
+
+    #[Test]
+    public function treatsOuterLabeledBranchesAsOuterWhenTheInnerBranchIsUnlabeled(): void
+    {
+        $graph = new LayoutGraph();
+        $this->placedNode($graph, 'S', layer: 0, column: 8);
+        $this->placedNode($graph, 'L', layer: 1, column: 0, row: 6);
+        $this->placedNode($graph, 'M', layer: 1, column: 8, row: 6);
+        $this->placedNode($graph, 'R', layer: 1, column: 16, row: 6);
+
+        $this->connectLabeled($graph, 'S', 'L', 'left-lbl');
+        $this->connectLabeled($graph, 'S', 'M', null);
+        $this->connectLabeled($graph, 'S', 'R', 'right-lbl');
+        $graph->buildLayerIndex();
+
+        (new LabelReserver())->process($graph);
+
+        self::assertSame(0, $graph->divergingLift('S'), 'Only an unlabeled branch sits at the geometric inner position; neither outer label may borrow it');
+    }
+
+    #[Test]
+    public function ignoresANonAdjacentSiblingWhenDeterminingInnerBranches(): void
+    {
+        $graph = new LayoutGraph();
+        $this->placedNode($graph, 'S', layer: 0, column: 8);
+        $this->placedNode($graph, 'L', layer: 1, column: 0, row: 6);
+        $this->placedNode($graph, 'R', layer: 1, column: 16, row: 6);
+        $this->placedNode($graph, 'Z', layer: 2, column: 8, row: 12);
+
+        $this->connectLabeled($graph, 'S', 'L', 'outer-lbl');
+        $this->connectLabeled($graph, 'S', 'R', null);
+        $this->connectLabeled($graph, 'S', 'Z', 'deep-lbl');
+        $graph->buildLayerIndex();
+
+        (new LabelReserver())->process($graph);
+
+        self::assertSame(0, $graph->divergingLift('S'), 'Z sits two layers down; its geometric position between L and R must not count as an inner branch');
+    }
+
+    #[Test]
+    public function treatsInnerBranchesAsInnerRegardlessOfTheSourcesLayerDepth(): void
+    {
+        $graph = new LayoutGraph();
+        $this->placedNode($graph, 'A', layer: 0, column: 8);
+        $this->placedNode($graph, 'S', layer: 1, column: 8, row: 6);
+        $this->placedNode($graph, 'L', layer: 2, column: 0, row: 12);
+        $this->placedNode($graph, 'M', layer: 2, column: 8, row: 12);
+        $this->placedNode($graph, 'R', layer: 2, column: 16, row: 12);
+
+        $this->connectLabeled($graph, 'A', 'S', null);
+        $this->connectLabeled($graph, 'S', 'L', null);
+        $this->connectLabeled($graph, 'S', 'M', 'inner-lbl');
+        $this->connectLabeled($graph, 'S', 'R', null);
+        $graph->buildLayerIndex();
+
+        (new LabelReserver())->process($graph);
+
+        self::assertSame(1, $graph->divergingLift('S'), 'Adjacency must be checked via the layer DIFFERENCE, not the sum, so it still fires when the source sits below layer 0');
+    }
+
+    #[Test]
+    public function processesLaterQualifyingSourcesAfterAnEarlierSourceIsSkipped(): void
+    {
+        $graph = new LayoutGraph();
+        $this->placedNode($graph, 'Solo', layer: 0, column: 40);
+        $this->placedNode($graph, 'SoloTarget', layer: 1, column: 40, row: 6);
+        $this->placedNode($graph, 'S', layer: 0, column: 8);
+        $this->placedNode($graph, 'L', layer: 1, column: 0, row: 6);
+        $this->placedNode($graph, 'M', layer: 1, column: 8, row: 6);
+        $this->placedNode($graph, 'R', layer: 1, column: 16, row: 6);
+
+        // Solo's single edge is iterated first and fails the "at least 2
+        // siblings" check, which must skip only that edge, not abort the
+        // whole scan before S's genuine fan-out is ever reached.
+        $this->connectLabeled($graph, 'Solo', 'SoloTarget', 'solo-lbl');
+        $this->connectLabeled($graph, 'S', 'L', null);
+        $this->connectLabeled($graph, 'S', 'M', 'inner-lbl');
+        $this->connectLabeled($graph, 'S', 'R', null);
+        $graph->buildLayerIndex();
+
+        (new LabelReserver())->process($graph);
+
+        self::assertSame(1, $graph->divergingLift('S'), 'A skipped single-edge source must not stop later sources from being processed');
+    }
+
+    #[Test]
+    public function staggersFanOutsWhoseLabelsWouldStandOnlyOneColumnApart(): void
+    {
+        $graph = new LayoutGraph();
+        $this->placedNode($graph, 'S1', layer: 0, column: 4);
+        $this->placedNode($graph, 'S2', layer: 0, column: 22);
+        $this->placedNode($graph, 'A', layer: 1, column: 0, row: 6);
+        $this->placedNode($graph, 'B', layer: 1, column: 8, row: 6);
+        $this->placedNode($graph, 'C', layer: 1, column: 18, row: 6);
+        $this->placedNode($graph, 'D', layer: 1, column: 26, row: 6);
+
+        $this->connectLabeled($graph, 'S1', 'A', 'one');
+        $this->connectLabeled($graph, 'S1', 'B', 'x');
+        $this->connectLabeled($graph, 'S2', 'C', 'two');
+        $this->connectLabeled($graph, 'S2', 'D', null);
+        $graph->buildLayerIndex();
+
+        (new LabelReserver())->process($graph);
+
+        self::assertSame(0, $graph->divergingLift('S1'));
+        self::assertSame(1, $graph->divergingLift('S2'), 'The widest label of S1 decides its reach, and one blank column is too little');
+    }
+
+    #[Test]
+    public function keepsTheLeftmostOverlappingFanOutOnTheBaseRowWhateverTheEdgeOrder(): void
+    {
+        $graph = new LayoutGraph();
+        $this->placedNode($graph, 'S1', layer: 0, column: 4);
+        $this->placedNode($graph, 'S2', layer: 0, column: 20);
+        $this->placedNode($graph, 'A', layer: 1, column: 0, row: 6);
+        $this->placedNode($graph, 'B', layer: 1, column: 12, row: 6);
+        $this->placedNode($graph, 'C', layer: 1, column: 16, row: 6);
+        $this->placedNode($graph, 'D', layer: 1, column: 28, row: 6);
+
+        $this->connectLabeled($graph, 'S2', 'C', 'two');
+        $this->connectLabeled($graph, 'S2', 'D', null);
+        $this->connectLabeled($graph, 'S1', 'A', 'one');
+        $this->connectLabeled($graph, 'S1', 'B', null);
+        $graph->buildLayerIndex();
+
+        (new LabelReserver())->process($graph);
+
+        self::assertSame(0, $graph->divergingLift('S1'));
+        self::assertSame(1, $graph->divergingLift('S2'));
+    }
+
+    #[Test]
+    public function keepsScanningAfterALabeledLongEdge(): void
+    {
+        $graph = new LayoutGraph();
+        $this->placedNode($graph, 'Top', layer: 0, column: 40);
+        $this->placedNode($graph, 'Far', layer: 2, column: 40, row: 12);
+        $this->placedNode($graph, 'S', layer: 0, column: 8);
+        $this->placedNode($graph, 'L', layer: 1, column: 0, row: 6);
+        $this->placedNode($graph, 'M', layer: 1, column: 8, row: 6);
+        $this->placedNode($graph, 'R', layer: 1, column: 16, row: 6);
+
+        $this->connectLabeled($graph, 'Top', 'Far', 'far-lbl');
+        $this->connectLabeled($graph, 'S', 'L', null);
+        $this->connectLabeled($graph, 'S', 'M', 'inner-lbl');
+        $this->connectLabeled($graph, 'S', 'R', null);
+        $graph->buildLayerIndex();
+
+        (new LabelReserver())->process($graph);
+
+        self::assertSame(1, $graph->divergingLift('S'));
+    }
+
+    #[Test]
+    public function liftsEachOfThreeMutuallyOverlappingFanOutsOntoItsOwnRow(): void
+    {
+        $graph = new LayoutGraph();
+        $this->placedNode($graph, 'S1', layer: 0, column: 0);
+        $this->placedNode($graph, 'S2', layer: 0, column: 20);
+        $this->placedNode($graph, 'S3', layer: 0, column: 40);
+        $this->placedNode($graph, 'A', layer: 1, column: 0, row: 6);
+        $this->placedNode($graph, 'B', layer: 1, column: 12, row: 6);
+        $this->placedNode($graph, 'C', layer: 1, column: 10, row: 6);
+        $this->placedNode($graph, 'D', layer: 1, column: 22, row: 6);
+        $this->placedNode($graph, 'E', layer: 1, column: 14, row: 6);
+        $this->placedNode($graph, 'F', layer: 1, column: 26, row: 6);
+
+        $this->connectLabeled($graph, 'S1', 'A', 'one');
+        $this->connectLabeled($graph, 'S1', 'B', null);
+        $this->connectLabeled($graph, 'S2', 'C', 'two');
+        $this->connectLabeled($graph, 'S2', 'D', null);
+        $this->connectLabeled($graph, 'S3', 'E', 'three');
+        $this->connectLabeled($graph, 'S3', 'F', null);
+        $graph->buildLayerIndex();
+
+        (new LabelReserver())->process($graph);
+
+        self::assertSame(0, $graph->divergingLift('S1'));
+        self::assertSame(1, $graph->divergingLift('S2'));
+        self::assertSame(2, $graph->divergingLift('S3'), 'The third fan-out in the gap must lift two full rows, not one');
+    }
+
     /**
      * @param list<Node> $nodes
      * @param list<Edge> $edges
