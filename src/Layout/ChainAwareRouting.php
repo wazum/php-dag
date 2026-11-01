@@ -337,10 +337,10 @@ final readonly class ChainAwareRouting implements EdgeRouting
 
         $bendRow = max($exitRow, $entryRow - 1 - $bendLift);
         /** @infection-ignore-all <= is equivalent: when the ceiling equals the bend row the branch re-assigns max(exitRow, bendRow) === bendRow, leaving it unchanged */
-        if (null !== $bendCeiling && $bendCeiling < $bendRow) {
+        if (null !== $bendCeiling && $bendCeiling - $bendLift < $bendRow) {
             // Lift the bend above a group's top border so the vertical drop
             // crosses it, but never above where the edge exits its source.
-            $bendRow = max($exitRow, $bendCeiling);
+            $bendRow = max($exitRow, $bendCeiling - $bendLift);
         }
         $edge->waypoints = [
             new Waypoint($bendRow, $exitColumn),

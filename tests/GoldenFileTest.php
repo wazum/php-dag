@@ -126,6 +126,9 @@ final class GoldenFileTest extends TestCase
         yield 'long_labelled_edge_keeps_its_lane' => ['long_labelled_edge_keeps_its_lane', Graph::fromDot('digraph { a -> b; b -> c; a -> c [label="skips b"] }'), $topToBottom];
         yield 'self_loop' => ['self_loop', Graph::fromDot('digraph { a -> b; b -> b }'), $topToBottom];
         yield 'fast_quality_keeps_a_late_source_on_top' => ['fast_quality_keeps_a_late_source_on_top', Graph::fromDot('digraph { a -> b; b -> c; c -> d; x -> d }'), AsciiDag::builder()->quality(LayoutQuality::Fast)->build()];
+        yield 'label_on_an_edge_entering_a_group' => ['label_on_an_edge_entering_a_group', Graph::fromDot('digraph { subgraph cluster_build { label="Build"; lint; test } checkout -> lint [label="src"]; lint -> test; test -> deploy [label="ok"] }'), $topToBottom];
+        yield 'label_on_a_fan_out_branch_entering_a_group' => ['label_on_a_fan_out_branch_entering_a_group', Graph::fromDot('digraph { subgraph cluster_build { label="Build"; lint; test } checkout -> lint [label="source code"]; checkout -> x; lint -> test; test -> deploy [label="ok"] }'), $topToBottom];
+        yield 'labelled_fan_out_above_a_group' => ['labelled_fan_out_above_a_group', Graph::fromDot('digraph { subgraph cluster_g { label="Archive"; old } review -> approve [label="yes"]; review -> reject [label="no"]; reject -> old }'), $topToBottom];
         yield 'left_to_right_labels_across_group_borders' => ['left_to_right_labels_across_group_borders', Graph::fromDot('digraph { subgraph cluster_build { label="Build"; lint; test } checkout -> lint [label="src"]; lint -> test; test -> deploy [label="ok"] }'), $leftToRight];
         yield 'left_to_right_cluster' => ['left_to_right_cluster', self::clusteredPipeline(), $leftToRight];
         yield 'left_to_right_cluster_evicts' => ['left_to_right_cluster_evicts', self::clusterEvictsForeign(), $leftToRight];

@@ -176,6 +176,17 @@ final readonly class LabelReserver implements Processor
         return [] !== $graph->singleLabelledEdges();
     }
 
+    private function entersGroup(LayoutGraph $graph, Edge $edge): bool
+    {
+        foreach ($graph->groups() as $group) {
+            if (in_array($edge->targetId, $group->nodeIds, true) && !in_array($edge->sourceId, $group->nodeIds, true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /** Must mirror DummyNodeInserter's corridor condition; reversed edges never qualify because their user-source layer sits at or above their user-target's, so the signed span is never > 1. */
     private function hasCorridor(LayoutGraph $graph, Edge $edge): bool
     {
@@ -288,6 +299,9 @@ final readonly class LabelReserver implements Processor
                 'firstColumn' => $this->firstChildColumn($graph, $edge->sourceId),
             ];
             $ownBendColumn = $bendColumns[$edge->targetId];
+            if ($this->entersGroup($graph, $edge)) {
+                $windowRowsBySource[$edge->sourceId] = 1;
+            }
             if ($ownBendColumn === min($bendColumns)) {
                 $span['from'] = min($span['from'], $ownBendColumn - 1 - $edge->label->width());
             } elseif ($ownBendColumn === max($bendColumns)) {
@@ -338,7 +352,10 @@ final readonly class LabelReserver implements Processor
             // channel and they have no rows of their own, so the labels need an
             // extra row above the bar. Longer edges keep their own channel rows.
             $convergesAdjacent = $targetInDegrees[$edge->targetId] >= 2 && 1 === $targetLayer - $sourceLayer;
-            if (LayerTransitions::hasBendingEdge($graph, $labelGap) && !$convergesAdjacent && !$this->hasCorridor($graph, $edge)) {
+            // An edge entering a group has only its bend bar outside the border,
+            // so its label needs a row of its own above the bar.
+            $entersGroup = $this->entersGroup($graph, $edge);
+            if (LayerTransitions::hasBendingEdge($graph, $labelGap) && !$convergesAdjacent && !$entersGroup && !$this->hasCorridor($graph, $edge)) {
                 continue;
             }
 

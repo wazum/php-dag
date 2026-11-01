@@ -299,6 +299,7 @@ final readonly class LabelRenderer implements ElementRenderer
         for ($row = $anchorRow + 1; $row <= $maxRow; ++$row) {
             $rows[] = $row;
         }
+        $rows[] = $minRow - 1;
 
         $candidates = [];
         foreach ($rows as $row) {
