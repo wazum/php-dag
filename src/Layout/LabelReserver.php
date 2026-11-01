@@ -207,33 +207,11 @@ final readonly class LabelReserver implements Processor
     /** @return array{array<string, int>, array<int, int>} [lift by source id, extra rows by gap] */
     private function divergingLifts(LayoutGraph $graph): array
     {
-        /** @var array<int, non-empty-array<string, array{from: int, to: int}>> */
-        $barSpansByGap = [];
-        $windowRowsBySource = [];
-        foreach ($graph->originalEdges() as $edge) {
-            if (null === $edge->label) {
-                continue;
-            }
-            $source = $graph->getLayoutNode($edge->sourceId);
-            if (1 !== $graph->getLayoutNode($edge->targetId)->layer - $source->layer) {
-                continue;
-            }
-            $bendColumns = $this->siblingBendColumns($graph, $edge->sourceId);
-            if (count($bendColumns) < 2) {
-                continue;
-            }
-            $reach = $edge->label->width() + 2;
-            $span = $barSpansByGap[$source->layer][$edge->sourceId] ?? ['from' => PHP_INT_MAX, 'to' => PHP_INT_MIN];
-            $barSpansByGap[$source->layer][$edge->sourceId] = [
-                'from' => min($span['from'], min($bendColumns) - $reach),
-                'to' => max($span['to'], max($bendColumns) + $reach),
-            ];
-            $ownBendColumn = $bendColumns[$edge->targetId];
-            if ($ownBendColumn > min($bendColumns) && $ownBendColumn < max($bendColumns)) {
-                $windowRowsBySource[$edge->sourceId] = 1;
-            }
+        while (null !== $collision = $this->labelOnlyCollision($graph)) {
+            $this->shiftColumnsAtOrRightOf($graph, ...$collision);
         }
 
+        [$barSpansByGap, $windowRowsBySource] = $this->fanOutSpans($graph);
         $lifts = [];
         $rowsByGap = [];
         foreach ($barSpansByGap as $gapLayer => $spansBySource) {
@@ -243,7 +221,7 @@ final readonly class LabelReserver implements Processor
             foreach ($spansBySource as $sourceId => $span) {
                 $takenTracks = [];
                 foreach ($tracks as $placedId => $placedTrack) {
-                    if ($spansBySource[$placedId]['to'] >= $span['from']) {
+                    if ($this->collides($spansBySource[$placedId]['to'], $span['from'])) {
                         $takenTracks[] = $placedTrack;
                     }
                 }
@@ -259,6 +237,83 @@ final readonly class LabelReserver implements Processor
         }
 
         return [$lifts, $rowsByGap];
+    }
+
+    /**
+     * @return array{int, int}|null [first column to move, columns to move by]
+     */
+    private function labelOnlyCollision(LayoutGraph $graph): ?array
+    {
+        foreach ($this->fanOutSpans($graph)[0] as $spansBySource) {
+            uasort($spansBySource, static fn (array $left, array $right): int => $left['from'] <=> $right['from']);
+            $previous = null;
+            foreach ($spansBySource as $span) {
+                /** @infection-ignore-all bar ends are box centres of distinct boxes in one layer, so two bars can never end on the same column and "<" equals "<=" */
+                if (null !== $previous && $previous['barTo'] < $span['barFrom'] && $this->collides($previous['to'], $span['from'])) {
+                    return [$span['firstColumn'], $previous['to'] + 3 - $span['from']];
+                }
+                $previous = $span;
+            }
+        }
+
+        return null;
+    }
+
+    private function collides(int $leftEnd, int $rightStart): bool
+    {
+        return $leftEnd + 3 > $rightStart;
+    }
+
+    /**
+     * Bar extent per labelled fan-out, widened by the outer labels that sit
+     * beyond its end corners, and whether an inner label needs its own row.
+     *
+     * @return array{array<int, non-empty-array<string, array{from: int, to: int, barFrom: int, barTo: int, firstColumn: int}>>, array<string, int>}
+     */
+    private function fanOutSpans(LayoutGraph $graph): array
+    {
+        /** @var array<int, non-empty-array<string, array{from: int, to: int, barFrom: int, barTo: int, firstColumn: int}>> $spansByGap */
+        $spansByGap = [];
+        $windowRowsBySource = [];
+        foreach ($graph->originalEdges() as $edge) {
+            if (null === $edge->label) {
+                continue;
+            }
+            $source = $graph->getLayoutNode($edge->sourceId);
+            if (1 !== $graph->getLayoutNode($edge->targetId)->layer - $source->layer) {
+                continue;
+            }
+            $bendColumns = $this->siblingBendColumns($graph, $edge->sourceId);
+            if (count($bendColumns) < 2) {
+                continue;
+            }
+            $span = $spansByGap[$source->layer][$edge->sourceId] ?? [
+                'from' => min($bendColumns),
+                'to' => max($bendColumns),
+                'barFrom' => min($bendColumns),
+                'barTo' => max($bendColumns),
+                'firstColumn' => $this->firstChildColumn($graph, $edge->sourceId),
+            ];
+            $ownBendColumn = $bendColumns[$edge->targetId];
+            if ($ownBendColumn === min($bendColumns)) {
+                $span['from'] = min($span['from'], $ownBendColumn - 1 - $edge->label->width());
+            } elseif ($ownBendColumn === max($bendColumns)) {
+                $span['to'] = max($span['to'], $ownBendColumn + 1 + $edge->label->width());
+            } else {
+                $windowRowsBySource[$edge->sourceId] = 1;
+            }
+            $spansByGap[$source->layer][$edge->sourceId] = $span;
+        }
+
+        return [$spansByGap, $windowRowsBySource];
+    }
+
+    private function firstChildColumn(LayoutGraph $graph, string $sourceId): int
+    {
+        return min(PHP_INT_MAX, ...array_map(
+            static fn (LayoutEdge $segment): int => $graph->getLayoutNode($segment->targetId())->column,
+            $graph->outgoingEdges($sourceId),
+        ));
     }
 
     /**

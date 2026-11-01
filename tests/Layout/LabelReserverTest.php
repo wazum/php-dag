@@ -631,14 +631,14 @@ final class LabelReserverTest extends TestCase
     }
 
     #[Test]
-    public function staggersOverlappingBarsOfLabeledFanOutsInOneGap(): void
+    public function staggersInterleavedBarsOfLabeledFanOutsInOneGap(): void
     {
         $graph = new LayoutGraph();
         $this->placedNode($graph, 'S1', layer: 0, column: 4);
         $this->placedNode($graph, 'S2', layer: 0, column: 20);
         $this->placedNode($graph, 'A', layer: 1, column: 0, row: 6);
         $this->placedNode($graph, 'B', layer: 1, column: 12, row: 6);
-        $this->placedNode($graph, 'C', layer: 1, column: 16, row: 6);
+        $this->placedNode($graph, 'C', layer: 1, column: 6, row: 6);
         $this->placedNode($graph, 'D', layer: 1, column: 28, row: 6);
 
         $this->connectLabeled($graph, 'S1', 'A', 'one');
@@ -800,26 +800,26 @@ final class LabelReserverTest extends TestCase
     }
 
     #[Test]
-    public function staggersFanOutsWhoseLabelsWouldStandOnlyOneColumnApart(): void
+    public function movesAFanOutRightWhenOnlyItsLabelsWouldCollide(): void
     {
         $graph = new LayoutGraph();
         $this->placedNode($graph, 'S1', layer: 0, column: 4);
-        $this->placedNode($graph, 'S2', layer: 0, column: 22);
-        $this->placedNode($graph, 'A', layer: 1, column: 0, row: 6);
+        $secondSource = $this->placedNode($graph, 'S2', layer: 0, column: 22);
+        $leftmost = $this->placedNode($graph, 'A', layer: 1, column: 0, row: 6);
         $this->placedNode($graph, 'B', layer: 1, column: 8, row: 6);
-        $this->placedNode($graph, 'C', layer: 1, column: 18, row: 6);
+        $firstChild = $this->placedNode($graph, 'C', layer: 1, column: 16, row: 6);
         $this->placedNode($graph, 'D', layer: 1, column: 26, row: 6);
 
-        $this->connectLabeled($graph, 'S1', 'A', 'one');
-        $this->connectLabeled($graph, 'S1', 'B', 'x');
         $this->connectLabeled($graph, 'S2', 'C', 'two');
         $this->connectLabeled($graph, 'S2', 'D', null);
+        $this->connectLabeled($graph, 'S1', 'A', 'one');
+        $this->connectLabeled($graph, 'S1', 'B', 'x');
         $graph->buildLayerIndex();
 
         (new LabelReserver())->process($graph);
 
-        self::assertSame(0, $graph->divergingLift('S1'));
-        self::assertSame(1, $graph->divergingLift('S2'), 'The widest label of S1 decides its reach, and one blank column is too little');
+        self::assertSame([0, 0], [$graph->divergingLift('S1'), $graph->divergingLift('S2')]);
+        self::assertSame([17, 23], [$firstChild->column - $leftmost->column, $secondSource->column - $leftmost->column], '"x" ends at column 12 and "two" starts at 14; one more column gives the two blank columns between them');
     }
 
     #[Test]
@@ -830,7 +830,7 @@ final class LabelReserverTest extends TestCase
         $this->placedNode($graph, 'S2', layer: 0, column: 20);
         $this->placedNode($graph, 'A', layer: 1, column: 0, row: 6);
         $this->placedNode($graph, 'B', layer: 1, column: 12, row: 6);
-        $this->placedNode($graph, 'C', layer: 1, column: 16, row: 6);
+        $this->placedNode($graph, 'C', layer: 1, column: 6, row: 6);
         $this->placedNode($graph, 'D', layer: 1, column: 28, row: 6);
 
         $this->connectLabeled($graph, 'S2', 'C', 'two');

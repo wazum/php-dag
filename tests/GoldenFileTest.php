@@ -73,6 +73,7 @@ final class GoldenFileTest extends TestCase
         yield 'self_loop_beside_feedback' => ['self_loop_beside_feedback', Graph::fromDot('digraph { a -> b; b -> a; b -> b }'), $topToBottom];
         yield 'west_self_loop_beside_neighbour' => ['west_self_loop_beside_neighbour', Graph::fromDot('digraph { r -> x; r -> b; b -> r; b -> b }'), $topToBottom];
         yield 'feedback_beside_a_neighbour' => ['feedback_beside_a_neighbour', Graph::fromDot('digraph { r -> b; r -> x; b -> r }'), $topToBottom];
+        yield 'fan_outs_with_colliding_labels' => ['fan_outs_with_colliding_labels', Graph::fromDot('digraph { a -> c [label="x"]; a -> d [label="yes please"]; b -> e [label="no thanks"]; b -> f [label="v"] }'), $topToBottom];
         yield 'highlighted_path' => ['highlighted_path', self::highlightedPath(), $topToBottom];
         yield 'cycle' => ['cycle', self::cycle(), $topToBottom];
         yield 'disconnected_components' => ['disconnected_components', self::disconnectedComponents(), $topToBottom];
