@@ -28,7 +28,7 @@ jobs:
           extensions: mbstring
           coverage: none
 
-      - uses: ramsey/composer-install@v3
+      - uses: ramsey/composer-install@v4
 
       - name: Validate package metadata
         run: composer validate --strict
@@ -62,7 +62,7 @@ jobs:
           extensions: mbstring
           coverage: xdebug
 
-      - uses: ramsey/composer-install@v3
+      - uses: ramsey/composer-install@v4
 
       - name: Infection
         run: ./vendor/bin/infection --threads=max --no-progress
