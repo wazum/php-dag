@@ -64,19 +64,17 @@ final readonly class LayerTransitions
      * off-by-one tolerance of ChainAwareRouting::alignedTargetColumn(),
      * which routes such edges straight into the target.
      */
-    public static function hasBendingEdge(LayoutGraph $graph, int $layer): bool
+    public static function hasBendingEdge(LayoutGraph $graph, int $layer, FlowDirection $direction = FlowDirection::TopToBottom): bool
     {
         foreach ($graph->layerIndex()[$layer] ?? [] as $nodeId) {
-            $sourceNode = $graph->getLayoutNode($nodeId);
-            $sourceCenter = $sourceNode->column + intdiv($sourceNode->boxWidth(), 2);
+            $sourceCenter = self::crossCenter($graph->getLayoutNode($nodeId), $direction);
 
             foreach ($graph->outgoingEdges($nodeId) as $edge) {
                 /** @infection-ignore-all skipping vs. processing reversed edges: feedback edges are lane-routed and never bend a transition */
                 if ($edge->reversed) {
                     continue;
                 }
-                $targetNode = $graph->getLayoutNode($edge->targetId());
-                if (!self::routesStraight($graph, $sourceCenter, $targetNode)) {
+                if (!self::routesStraight($graph, $sourceCenter, $graph->getLayoutNode($edge->targetId()), $direction)) {
                     return true;
                 }
             }
@@ -85,54 +83,33 @@ final readonly class LayerTransitions
         return false;
     }
 
-    /** Left-to-right mirror of hasBendingEdge(): compares row centers instead of column centers. */
-    public static function hasBendingEdgeLeftToRight(LayoutGraph $graph, int $layer): bool
+    private static function routesStraight(LayoutGraph $graph, int $sourceCenter, LayoutNode $targetNode, FlowDirection $direction): bool
     {
-        foreach ($graph->layerIndex()[$layer] ?? [] as $nodeId) {
-            $sourceNode = $graph->getLayoutNode($nodeId);
-            /** @infection-ignore-all box-center rounding: a center shifted by intdiv divisor still lies inside the box and detection stays geometric */
-            $sourceCenter = $sourceNode->row + intdiv($sourceNode->boxHeight(), 2);
-
-            foreach ($graph->outgoingEdges($nodeId) as $edge) {
-                /** @infection-ignore-all skipping vs. processing reversed edges: feedback edges are lane-routed and never bend a transition */
-                if ($edge->reversed) {
-                    continue;
-                }
-                $targetNode = $graph->getLayoutNode($edge->targetId());
-                if (!self::routesStraightLeftToRight($graph, $sourceCenter, $targetNode)) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    private static function routesStraightLeftToRight(LayoutGraph $graph, int $sourceCenter, LayoutNode $targetNode): bool
-    {
-        /** @infection-ignore-all box-center rounding: a center shifted by intdiv divisor still lies inside the box and detection stays geometric */
-        $targetCenter = $targetNode->row + intdiv($targetNode->boxHeight(), 2);
+        $targetCenter = self::crossCenter($targetNode, $direction);
         if ($sourceCenter === $targetCenter) {
             return true;
         }
 
-        /** @infection-ignore-all row-tolerance mirror of the column predicate pinned by LayerTransitionsTest; the row variant is equivalent by symmetry */
+        [$targetStart, $targetSize] = self::crossExtent($targetNode, $direction);
+
         return 1 === abs($sourceCenter - $targetCenter)
-            && $sourceCenter > $targetNode->row
-            && $sourceCenter < $targetNode->row + $targetNode->boxHeight() - 1
+            && $sourceCenter > $targetStart
+            && $sourceCenter < $targetStart + $targetSize - 1
             && count($graph->incomingEdges($targetNode->id)) <= 1;
     }
 
-    private static function routesStraight(LayoutGraph $graph, int $sourceCenter, LayoutNode $targetNode): bool
+    private static function crossCenter(LayoutNode $node, FlowDirection $direction): int
     {
-        $targetCenter = $targetNode->column + intdiv($targetNode->boxWidth(), 2);
-        if ($sourceCenter === $targetCenter) {
-            return true;
-        }
+        [$start, $size] = self::crossExtent($node, $direction);
 
-        return 1 === abs($sourceCenter - $targetCenter)
-            && $sourceCenter > $targetNode->column
-            && $sourceCenter < $targetNode->column + $targetNode->boxWidth() - 1
-            && count($graph->incomingEdges($targetNode->id)) <= 1;
+        return $start + intdiv($size, 2);
+    }
+
+    /** @return array{int, int} start and size across the flow */
+    private static function crossExtent(LayoutNode $node, FlowDirection $direction): array
+    {
+        return FlowDirection::TopToBottom === $direction
+            ? [$node->column, $node->boxWidth()]
+            : [$node->row, $node->boxHeight()];
     }
 }

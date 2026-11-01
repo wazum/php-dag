@@ -20,6 +20,7 @@ These are breaking changes; the next release is 2.0.0.
 - `EdgeRenderer::renderRoute()` and the `sourceArrow`/`targetArrow` parameters of `EdgeRoute`: `EdgeRenderer::render()` draws each edge's arrow from the layout.
 - `EdgeGlyphs::crossingCharacter()`, `vertical()` and `horizontal()`, and the `crossingCharacter` constructor parameter: use `junctionFor()`.
 - The `median` parameter of `MedianOrdering` and the `maxExchanges` parameter of `NetworkSimplexLayering`.
+- `VerticalCompactor` and `HorizontalCompactor` are replaced by `LayerCompactor(FlowDirection, minimumSpacing)`; use `LayerCompactor::class` with `Pipeline::insertAfter()` and similar. `LayerTransitions::hasBendingEdgeLeftToRight()` is now `hasBendingEdge($graph, $layer, FlowDirection::LeftToRight)`.
 
 ### Fixed
 

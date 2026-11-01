@@ -8,19 +8,21 @@ use PhpDag\Graph\Edge;
 use PhpDag\Graph\Graph;
 use PhpDag\Graph\Node;
 use PhpDag\Layout\BrandesKopfPositioning;
+use PhpDag\Layout\FlowDirection;
+use PhpDag\Layout\LayerCompactor;
 use PhpDag\Layout\LayoutGraph;
+use PhpDag\Layout\LayoutNode;
 use PhpDag\Layout\LongestPathLayering;
 use PhpDag\Layout\Processor;
-use PhpDag\Layout\VerticalCompactor;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
-final class VerticalCompactorTest extends TestCase
+final class LayerCompactorTest extends TestCase
 {
     #[Test]
     public function implementsProcessorInterface(): void
     {
-        self::assertInstanceOf(Processor::class, new VerticalCompactor());
+        self::assertInstanceOf(Processor::class, new LayerCompactor(FlowDirection::TopToBottom));
     }
 
     #[Test]
@@ -32,7 +34,7 @@ final class VerticalCompactorTest extends TestCase
 
         $rowBefore = $layoutGraph->getLayoutNode('A')->row;
 
-        (new VerticalCompactor())->process($layoutGraph);
+        (new LayerCompactor(FlowDirection::TopToBottom))->process($layoutGraph);
 
         self::assertSame($rowBefore, $layoutGraph->getLayoutNode('A')->row);
     }
@@ -47,12 +49,12 @@ final class VerticalCompactorTest extends TestCase
 
         $layoutGraph->getLayoutNode('B')->row += 10;
 
-        (new VerticalCompactor())->process($layoutGraph);
+        (new LayerCompactor(FlowDirection::TopToBottom))->process($layoutGraph);
 
         $nodeA = $layoutGraph->getLayoutNode('A');
         $nodeB = $layoutGraph->getLayoutNode('B');
         $actualGap = $nodeB->row - ($nodeA->row + $nodeA->boxHeight());
-        self::assertSame(2, $actualGap, 'Gap should be compacted to minimumVerticalSpacing');
+        self::assertSame(2, $actualGap, 'Gap should be compacted to the minimum spacing');
     }
 
     #[Test]
@@ -64,7 +66,7 @@ final class VerticalCompactorTest extends TestCase
         );
         $rowBefore = $layoutGraph->getLayoutNode('B')->row;
 
-        (new VerticalCompactor(minimumVerticalSpacing: 9))->process($layoutGraph);
+        (new LayerCompactor(FlowDirection::TopToBottom, minimumSpacing: 9))->process($layoutGraph);
 
         self::assertSame($rowBefore, $layoutGraph->getLayoutNode('B')->row);
     }
@@ -83,7 +85,7 @@ final class VerticalCompactorTest extends TestCase
 
         $layoutGraph->getLayoutNode('C')->row += 10;
 
-        (new VerticalCompactor())->process($layoutGraph);
+        (new LayerCompactor(FlowDirection::TopToBottom))->process($layoutGraph);
 
         $nodeB = $layoutGraph->getLayoutNode('B');
         $nodeC = $layoutGraph->getLayoutNode('C');
@@ -104,7 +106,7 @@ final class VerticalCompactorTest extends TestCase
 
         $layoutGraph->getLayoutNode('B')->row += 10;
 
-        (new VerticalCompactor())->process($layoutGraph);
+        (new LayerCompactor(FlowDirection::TopToBottom))->process($layoutGraph);
 
         $nodeA = $layoutGraph->getLayoutNode('A');
         $nodeB = $layoutGraph->getLayoutNode('B');
@@ -137,7 +139,7 @@ final class VerticalCompactorTest extends TestCase
             }
         }
 
-        (new VerticalCompactor())->process($layoutGraph);
+        (new LayerCompactor(FlowDirection::TopToBottom))->process($layoutGraph);
 
         foreach ($layoutGraph->nodeIds() as $nodeId) {
             self::assertSame(
@@ -164,12 +166,60 @@ final class VerticalCompactorTest extends TestCase
             $layoutGraph->getLayoutNode($nodeId)->row += 10;
         }
 
-        (new VerticalCompactor())->process($layoutGraph);
+        (new LayerCompactor(FlowDirection::TopToBottom))->process($layoutGraph);
 
         $nodeA = $layoutGraph->getLayoutNode('A');
         $nodeB = $layoutGraph->getLayoutNode('B');
         $actualGap = $nodeB->row - ($nodeA->row + $nodeA->boxHeight());
-        self::assertSame(3, $actualGap, 'Fan-out transition bends, so the gap must be minimumVerticalSpacing plus one channel row');
+        self::assertSame(3, $actualGap, 'Fan-out transition bends, so the gap must be the minimum spacing plus one channel row');
+    }
+
+    #[Test]
+    public function compactsExcessSpacingBetweenTwoStraightLayersLeftToRight(): void
+    {
+        [$layoutGraph, $nodeA, $nodeB] = $this->twoColumnLayers(bColumn: 20);
+
+        (new LayerCompactor(FlowDirection::LeftToRight))->process($layoutGraph);
+
+        self::assertSame($nodeA->boxWidth() + 2, $nodeB->column, 'Excess gap must shrink to the minimum spacing of 2');
+    }
+
+    #[Test]
+    public function reservesTheSelfLoopLaneWhenCompactingLeftToRight(): void
+    {
+        [$layoutGraph, $nodeA, $nodeB] = $this->twoColumnLayers(bColumn: 20, selfLoopOnA: true);
+
+        (new LayerCompactor(FlowDirection::LeftToRight))->process($layoutGraph);
+
+        self::assertGreaterThanOrEqual(
+            $nodeA->boxWidth() + 3,
+            $nodeB->column,
+            'The next layer must clear the self-loop lane with a gap, not be compacted onto it',
+        );
+    }
+
+    #[Test]
+    public function keepsExactMinimumSpacingUntouchedLeftToRight(): void
+    {
+        [$layoutGraph, $nodeA, $nodeB] = $this->twoColumnLayers(bColumn: 7);
+        $expected = $nodeA->boxWidth() + 2;
+        $nodeB->column = $expected;
+
+        (new LayerCompactor(FlowDirection::LeftToRight))->process($layoutGraph);
+
+        self::assertSame($expected, $nodeB->column, 'A gap already at minimum spacing must not move');
+    }
+
+    #[Test]
+    public function leavesAGapNarrowerThanRequiredAsItIsLeftToRight(): void
+    {
+        [$layoutGraph, $nodeA, $nodeB] = $this->twoColumnLayers(bColumn: 7);
+        $expected = $nodeA->boxWidth() + 1;
+        $nodeB->column = $expected;
+
+        (new LayerCompactor(FlowDirection::LeftToRight))->process($layoutGraph);
+
+        self::assertSame($expected, $nodeB->column);
     }
 
     /**
@@ -195,5 +245,27 @@ final class VerticalCompactorTest extends TestCase
         (new BrandesKopfPositioning())->position($layoutGraph);
 
         return $layoutGraph;
+    }
+
+    /** @return array{LayoutGraph, LayoutNode, LayoutNode} */
+    private function twoColumnLayers(int $bColumn, bool $selfLoopOnA = false): array
+    {
+        $graph = new Graph();
+        $graph->addNode(new Node('A', 'Alpha'));
+        $graph->addNode(new Node('B', 'Beta'));
+        if ($selfLoopOnA) {
+            $graph->addEdge(new Edge('A', 'A'));
+        }
+
+        $layoutGraph = LayoutGraph::fromGraph($graph);
+        $nodeA = $layoutGraph->getLayoutNode('A');
+        $nodeA->layer = 0;
+        $nodeA->column = 0;
+        $nodeB = $layoutGraph->getLayoutNode('B');
+        $nodeB->layer = 1;
+        $nodeB->column = $bColumn;
+        $layoutGraph->buildLayerIndex();
+
+        return [$layoutGraph, $nodeA, $nodeB];
     }
 }

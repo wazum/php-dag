@@ -17,9 +17,9 @@ use PhpDag\Layout\FlowDirection;
 use PhpDag\Layout\ForeignNodeEvictor;
 use PhpDag\Layout\GroupOrdering;
 use PhpDag\Layout\GroupSpacer;
-use PhpDag\Layout\HorizontalCompactor;
 use PhpDag\Layout\LabelReserver;
 use PhpDag\Layout\LayerAssigner;
+use PhpDag\Layout\LayerCompactor;
 use PhpDag\Layout\LayoutEngine;
 use PhpDag\Layout\LayoutQuality;
 use PhpDag\Layout\LeftToRightLabelReserver;
@@ -31,7 +31,6 @@ use PhpDag\Layout\ParallelPortAligner;
 use PhpDag\Layout\ParallelPortReserver;
 use PhpDag\Layout\Pipeline;
 use PhpDag\Layout\SelfLoopRouter;
-use PhpDag\Layout\VerticalCompactor;
 use PhpDag\Render\AnsiFormatter;
 use PhpDag\Render\BoxRenderer;
 use PhpDag\Render\EdgeRenderer;
@@ -193,7 +192,7 @@ final class AsciiDagBuilder
         $pipeline->add(new ParallelPortReserver(FlowDirection::TopToBottom));
         $pipeline->add(new NodePositioner(new BrandesKopfPositioning(
             horizontalSpacing: $this->nodeSpacing,
-            /** @infection-ignore-all the +1 seeds extra gap that VerticalCompactor reclaims down to the required spacing, so +1 vs +2 produces identical output */
+            /** @infection-ignore-all the +1 seeds extra gap that LayerCompactor reclaims down to the required spacing, so +1 vs +2 produces identical output */
             verticalSpacing: $this->rankSpacing + 1,
         )));
         $pipeline->add(new ForeignNodeEvictor());
@@ -201,7 +200,7 @@ final class AsciiDagBuilder
         $pipeline->add(new GroupSpacer());
         // After the cluster ring is reserved, reclaim the excess so the border
         // replaces the rank gap rather than stacking on top of it.
-        $pipeline->add(new VerticalCompactor($this->rankSpacing));
+        $pipeline->add(new LayerCompactor(FlowDirection::TopToBottom, $this->rankSpacing));
         $pipeline->add(new ParallelPortAligner(FlowDirection::TopToBottom, $this->nodeSpacing));
         $pipeline->add(new LabelReserver());
         $pipeline->add(new ParallelBendLaneReserver(FlowDirection::TopToBottom));
@@ -212,14 +211,14 @@ final class AsciiDagBuilder
     {
         $pipeline->add(new ParallelPortReserver(FlowDirection::LeftToRight));
         $pipeline->add(new NodePositioner(new LeftToRightPositioning(
-            /** @infection-ignore-all the +1 seeds extra gap that HorizontalCompactor reclaims down to the required spacing, so +1 vs +2 produces identical output */
+            /** @infection-ignore-all the +1 seeds extra gap that LayerCompactor reclaims down to the required spacing, so +1 vs +2 produces identical output */
             horizontalSpacing: $this->rankSpacing + 1,
             verticalSpacing: $this->nodeSpacing,
         )));
         $pipeline->add(new ForeignNodeEvictor(FlowDirection::LeftToRight));
         $pipeline->add(new ClusterMemberCentering(FlowDirection::LeftToRight));
         $pipeline->add(new GroupSpacer(FlowDirection::LeftToRight));
-        $pipeline->add(new HorizontalCompactor($this->rankSpacing));
+        $pipeline->add(new LayerCompactor(FlowDirection::LeftToRight, $this->rankSpacing));
         $pipeline->add(new ParallelPortAligner(FlowDirection::LeftToRight, $this->nodeSpacing));
         $pipeline->add(new LeftToRightLabelReserver());
         $pipeline->add(new ParallelBendLaneReserver(FlowDirection::LeftToRight));

@@ -55,7 +55,7 @@ final readonly class LeftToRightPositioning implements NodePositioning
     {
         foreach ($graph->selfLoops() as $loop) {
             if ($loop->edge->sourceId === $nodeId) {
-                /** @infection-ignore-all the exact value only has to place the next layer at or past the lane; HorizontalCompactor then reclaims to its own (tested) self-loop-aware minimum, so ±1 here is normalised away */
+                /** @infection-ignore-all the exact value only has to place the next layer at or past the lane; LayerCompactor then reclaims to its own (tested) self-loop-aware minimum, so ±1 here is normalised away */
                 return 2;
             }
         }

@@ -16,19 +16,17 @@ use PhpDag\Layout\DepthFirstOrdering;
 use PhpDag\Layout\ForeignNodeEvictor;
 use PhpDag\Layout\GroupOrdering;
 use PhpDag\Layout\GroupSpacer;
+use PhpDag\Layout\LayerCompactor;
 use PhpDag\Layout\LayoutGraph;
 use PhpDag\Layout\LayoutQuality;
 use PhpDag\Layout\Pipeline;
 use PhpDag\Layout\Processor;
-use PhpDag\Layout\VerticalCompactor;
 use PhpDag\Render\BoxRenderer;
 use PhpDag\Render\PlainTextFormatter;
 use PhpDag\Render\Renderer;
 use PhpDag\Style\AnsiColor;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
-use ReflectionMethod;
-use ReflectionProperty;
 
 final class AsciiDagBuilderTest extends TestCase
 {
@@ -163,7 +161,7 @@ final class AsciiDagBuilderTest extends TestCase
         $graph->addEdge(new Edge('A', 'B'));
 
         $pipeline = AsciiDag::builder()->defaultPipeline();
-        $pipeline->insertAfter(VerticalCompactor::class, new class implements Processor {
+        $pipeline->insertAfter(LayerCompactor::class, new class implements Processor {
             public function process(LayoutGraph $layoutGraph): void
             {
                 $layoutGraph->getLayoutNode('B')->row += 2;
@@ -480,25 +478,9 @@ final class AsciiDagBuilderTest extends TestCase
     }
 
     #[Test]
-    public function defaultTopToBottomPipelineIncludesVerticalCompactor(): void
+    public function defaultPipelineIncludesTheLayerCompactor(): void
     {
-        $builder = new AsciiDagBuilder();
-        $reflection = new ReflectionMethod($builder, 'buildDefaultPipeline');
-        /** @var Pipeline $pipeline */
-        $pipeline = $reflection->invoke($builder);
-        $pipelineReflection = new ReflectionProperty(Pipeline::class, 'processors');
-        /** @var list<Processor> $processors */
-        $processors = $pipelineReflection->getValue($pipeline);
-
-        $hasVerticalCompactor = false;
-        foreach ($processors as $processor) {
-            if ($processor instanceof VerticalCompactor) {
-                $hasVerticalCompactor = true;
-                break;
-            }
-        }
-
-        self::assertTrue($hasVerticalCompactor, 'Default TB pipeline must include VerticalCompactor');
+        self::assertTrue((new AsciiDagBuilder())->defaultPipeline()->contains(LayerCompactor::class));
     }
 
     #[Test]

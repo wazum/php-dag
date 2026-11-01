@@ -669,8 +669,8 @@ Turns the graph into coordinates. Each processor changes one mutable
  └────────────┬─────────────┘
               ▼
  ┌──────────────────────────┐
- │   6. VerticalCompactor   │    Remove extra whitespace along
- │      / Horizontal        │    the flow axis
+ │   6. LayerCompactor      │    Remove extra whitespace along
+ │                          │    the flow axis
  └────────────┬─────────────┘
               ▼
  ┌──────────────────────────┐
