@@ -4,6 +4,9 @@
 /.ddev export-ignore
 /.github export-ignore
 /tests export-ignore
+/bench export-ignore
+/diagrams export-ignore
+/guide export-ignore
 /.gitattributes export-ignore
 /.gitignore export-ignore
 /.php-cs-fixer.dist.php export-ignore

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-PHP library (`wazum/php-dag`) that renders directed acyclic graphs as ASCII art using the Sugiyama algorithm. Greenfield project — architecture is defined in `PLAN.md`, implementation follows strict TDD.
+PHP library (`wazum/php-dag`) that renders directed graphs as ASCII/Unicode art using the Sugiyama algorithm. User docs live in `README.md` and `guide/*.md`; `guide/how-it-works.md` describes the architecture. Implementation follows strict TDD.
 
 ## Strict TDD Workflow
 
@@ -31,7 +31,7 @@ ddev exec composer test
 ddev exec ./vendor/bin/phpunit tests/Path/To/SomeTest.php --testdox
 
 # Run a single test method
-ddev exec ./vendor/bin/phpunit --filter testMethodName tests/Path/To/SomeTest.php
+ddev exec ./vendor/bin/phpunit --filter methodName tests/Path/To/SomeTest.php
 
 # Static analysis
 ddev exec composer phpstan        # PHPStan at level max
@@ -44,35 +44,33 @@ ddev exec composer cs-check       # Check without fixing
 # Full QA suite (cs-check + phpstan + psalm + tests)
 ddev exec composer qa
 
-# Mutation testing
-ddev exec ./vendor/bin/infection
+# Mutation testing (CI requires 100% covered MSI and MSI)
+ddev exec 'XDEBUG_MODE=coverage ./vendor/bin/infection --threads=max --initial-tests-php-options="-d zend_extension=xdebug.so"'
+
+# Benchmark, and the README diagrams after editing diagrams/*.html
+ddev exec php bench/run.php
+ddev exec php diagrams/export.php
 ```
 
 ## Architecture
 
-Three bounded contexts forming a pipeline: **Graph** (domain model) -> **Layout** (positioning) -> **Render** (output).
+Three stages forming a pipeline: **Graph** (domain model) -> **Layout** (positioning) -> **Render** (output).
 
 ### Namespaces (`PhpDag\`)
 
-- **`Graph\`** — Domain model. `Graph` is the aggregate root with fluent builder API. `Node` and `Edge` are entities. `Style`, `Label`, `BoxGlyphs` are value objects. Enums: `BoxStyle`, `EdgeStyle`, `ArrowShape`, `Direction`, `LabelPosition`.
-- **`Layout\`** — Sugiyama layout engine using a **processor pipeline** (inspired by ELK). `LayoutEngine` facade takes a `Graph`, produces a `LayoutGraph` (mutable intermediate representation with coordinates). Each pipeline phase is a `Processor` implementation operating on `LayoutGraph`. Algorithm variants use strategy interfaces (`LayerAssignment`, `OrderingStrategy`, `RoutingStrategy`).
-- **`Render\`** — `Canvas` is a 2D sparse cell buffer (inspired by Ratatui). Each `Cell` carries a character, 4-bit direction bitmask, style, and z-index. `ElementRenderer` implementations (BoxRenderer, EdgeRenderer, ArrowRenderer, LabelRenderer) draw onto the canvas. `OutputFormatter` implementations (PlainTextFormatter, AnsiFormatter) convert the canvas to a string. `GlyphSet` interface (UnicodeGlyphs, AsciiGlyphs) maps direction bitmasks to junction characters.
-- **`AsciiDag`** — Top-level facade composing LayoutEngine + Renderer.
+- **`Graph\`** — Domain model. `Graph` is the aggregate root with a fluent builder API. `Node`, `Edge` and `Group` are entities; `NodeStyle`, `Label`, `Badge` are value objects. Enums: `LabelPosition`, `ContentAlignment`.
+- **`Style\`** — Enums and glyph tables shared by graph and renderer: `BorderStyle`, `EdgeStrokeStyle`, `AnsiColor`, `BorderGlyphs`, `EdgeGlyphs`.
+- **`Layout\`** — Sugiyama layout engine as a **processor pipeline** (inspired by ELK). `LayoutEngine` turns a `Graph` into a mutable `LayoutGraph`; each phase is a `Processor` in a `Pipeline`. Algorithm variants sit behind strategy interfaces (`LayerAssignment`, `CrossingMinimization`, `NodePositioning`, `EdgeRouting`).
+- **`Render\`** — `Canvas` is a sparse 2D cell buffer (inspired by Ratatui). Each `Cell` carries a character, a 4-bit `Direction` mask, style and z-index. `ElementRenderer` implementations (`BoxRenderer`, `EdgeRenderer`, `GroupRenderer`, `LabelRenderer`) draw onto the canvas; `OutputFormatter` implementations (`PlainTextFormatter`, `AnsiFormatter`) turn it into a string.
+- **`Dot\`** — `DotParser` (DOT in) and `DotExporter` (DOT out).
+- **`AsciiDag`** / **`AsciiDagBuilder`** — top-level facade composing layout and renderer; `LayoutResult` holds one finished layout.
 
 ### Key Design Decisions
 
-- **Processor pipeline**: Layout algorithm decomposed into ~10 independent, swappable processors (not a monolithic function). See `PLAN.md` section 3 for the default pipeline phases.
-- **Direction bitmask for junctions**: 4-bit mask (UP=1, RIGHT=2, DOWN=4, LEFT=8) with 16-entry glyph lookup. Bits OR together — eliminates all special-case logic for corners, T-junctions, crossings.
-- **Canvas z-index**: Boxes at z=10, labels at z=8, edges at z=5. Eliminates draw-order dependencies between renderers.
-- **Mutable LayoutGraph IR**: Processors mutate in-place (no cloning per step). The user-facing `Graph` stays clean; `LayoutGraph` is the internal scratchpad with dummy nodes, reversed edges, and coordinates.
-
-### Implementation Roadmap (from PLAN.md)
-
-- **Phase 1 (MVP)**: Linear chains — Graph model, Canvas, BoxRenderer, LongestPathLayering, NodePositioner, EdgeRouter (vertical only), PlainTextFormatter, facade
-- **Phase 2**: Branching & merging — CrossingMinimizer, DummyNodes, OrthogonalRouter
-- **Phase 3**: Rich annotations — Edge styles, labels, AnsiFormatter, multi-line content
-- **Phase 4**: Advanced — NetworkSimplex, CycleBreaker, groups, ChannelRouter, AsciiGlyphs
-- **Phase 5**: Ecosystem — HtmlFormatter, parser, framework integrations
+- **Processor pipeline**: the layout is a chain of independent, swappable processors, not one function. `AsciiDagBuilder::defaultPipeline()` lists the default order.
+- **Direction bitmask for junctions**: 4-bit mask (UP=1, RIGHT=2, DOWN=4, LEFT=8) with a 16-entry glyph lookup. Bits OR together, so corners, T-junctions and crossings need no special cases.
+- **Canvas z-index**: edge ends on a box border at 11+, boxes at 10, labels at 8, groups at 6, edges at 5. Removes draw-order dependencies between renderers.
+- **Mutable LayoutGraph IR**: processors mutate it in place. The user-facing `Graph` stays clean; `LayoutGraph` is the internal scratchpad with dummy nodes, reversed edges and coordinates.
 
 ## Code Style
 
@@ -81,12 +79,12 @@ Three bounded contexts forming a pipeline: **Graph** (domain model) -> **Layout*
 - PHPStan at max level, Psalm enabled
 - No abbreviated variable/method names (use `$vertex` not `$v`)
 - Use modern PHP: `readonly`, `match`, enums, early returns
-- Autoload: `PhpDag\` -> `src/`, `PhpDag\Tests\` -> `tests/`
 
 ## Testing
 
-- PHPUnit 11, test-first workflow
+- PHPUnit 11, test-first workflow; `#[Test]` attribute, no `test` method prefix
 - `failOnRisky` and `failOnWarning` are enabled
 - Test namespaces mirror source: `PhpDag\Tests\Graph\GraphTest` tests `PhpDag\Graph\Graph`
 - Integration tests use golden-file snapshots in `tests/Fixtures/`
-- Mutation testing via Infection for quality verification
+- `DocumentationTest` runs every PHP and DOT sample in `README.md` and `guide/*.md` that is followed by an output block, and compares the output
+- Mutation testing via Infection; annotate a true equivalent mutant with `@infection-ignore-all` and the reason
