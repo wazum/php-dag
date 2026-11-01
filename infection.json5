@@ -1,5 +1,8 @@
 {
     "$schema": "vendor/infection/infection/resources/schema.json",
+    "timeout": 10,
+    "minMsi": 100,
+    "minCoveredMsi": 100,
     "source": {
         "directories": [
             "src"
@@ -7,9 +10,6 @@
     },
     "mutators": {
         "@default": true,
-        // Decrementing the row counter to -1 only prepends an all-blank line that the
-        // leading-blank trim in both formatters removes again; an inline annotation would
-        // suppress every mutant inside the loop body, so the line is excluded here instead.
         // The DotParser line: landing on the newline instead of after it is equivalent,
         // the whitespace branch consumes it on the next tokenizer iteration.
         // The LabelRenderer $direction line: turning the "1" branch into "0" makes the
@@ -27,7 +27,6 @@
         // the walk direction and ARE covered by tests.
         "DecrementInteger": {
             "ignoreSourceCodeByRegex": [
-                "for \\(\\$row = 0; \\$row < \\$canvas->height\\(\\); \\+\\+\\$row\\) \\{",
                 "\\$offset = false === \\$newlinePosition \\? \\$length : \\$newlinePosition \\+ 1;",
                 "\\$direction = \\$preferAbove \\? -1 : 1;",
                 "\\$canvas->horizontalLine\\(\\$row, \\$start, \\$end, 0,.*",
@@ -63,18 +62,12 @@
                 "for \\(\\$offset = 1; \\$offset <= \\$maxRow - \\$minRow; \\+\\+\\$offset\\) \\{"
             ]
         },
-        // Widening "<" to "<=" makes the formatter loops call Canvas::get() one step past the
-        // edge, which autovivifies a fresh row/column, so the re-evaluated bound grows forever.
-        // The endless loop is only caught by the process timeout; an inline annotation would
-        // suppress every mutant inside the loop body, so the lines are excluded here instead.
         // The LabelRenderer second-pass guard: column 0 candidates are already handled by
         // the non-negative first pass, so widening "< 0" to "<= 0" re-checks a slot that
         // was either taken or unfit; excluded per mutator because the LogicalAnd mutant on
         // the same line skips the fit check and IS covered by a test.
         "LessThan": {
             "ignoreSourceCodeByRegex": [
-                "for \\(\\$row = 0; \\$row < \\$canvas->height\\(\\); \\+\\+\\$row\\) \\{",
-                "for \\(\\$column = 0; \\$column < \\$canvas->width\\(\\); \\+\\+\\$column\\) \\{",
                 "if \\(\\$column < 0 && \\$this->labelFits\\(\\$canvas, \\$boxes, \\$row, \\$column, \\$width\\)\\) \\{"
             ]
         },
@@ -108,22 +101,18 @@
                 "foreach \\(\\$members as \\$member\\) \\{"
             ]
         },
-        // Negating the trim-loop guards makes them pop/shift an empty array forever (PHP happily
+        // Negating the trim-loop guard makes it pop an empty array forever (PHP happily
         // returns null), so the loop spins until the process timeout; excluded per mutator so the
-        // other condition mutants on these lines stay alive.
+        // other condition mutants on this line stay alive.
         "LogicalAndNegation": {
             "ignoreSourceCodeByRegex": [
-                "while \\(\\[\\] !== \\$lines && '' === end\\(\\$lines\\)\\) \\{",
-                "while \\(\\[\\] !== \\$lines && '' === \\$lines\\[0\\]\\) \\{",
                 "while \\(\\[\\] !== \\$cells && ' ' === end\\(\\$cells\\)\\[0\\]\\) \\{"
             ]
         },
-        // Removing the pop/shift from the trim loops leaves their condition constantly true, so
-        // the loop spins until the process timeout; no assertion can detect the hang faster.
+        // Removing the pop from the trim loop leaves its condition constantly true, so the
+        // loop spins until the process timeout; no assertion can detect the hang faster.
         "FunctionCallRemoval": {
             "ignoreSourceCodeByRegex": [
-                "array_pop\\(\\$lines\\);",
-                "array_shift\\(\\$lines\\);",
                 "array_pop\\(\\$cells\\);"
             ]
         },
