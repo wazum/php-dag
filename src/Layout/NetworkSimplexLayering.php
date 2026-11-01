@@ -70,8 +70,8 @@ final class NetworkSimplexLayering implements LayerAssignment
         }
 
         $ranks = [];
-        foreach ($this->components($nodeIds, $edges) as $componentNodes) {
-            foreach ($this->rankComponent($componentNodes, $this->edgesWithin($componentNodes, $edges)) as $nodeId => $rank) {
+        foreach ($this->components($nodeIds, $edges) as [$componentNodes, $componentEdges]) {
+            foreach ($this->rankComponent($componentNodes, $componentEdges) as $nodeId => $rank) {
                 $ranks[$nodeId] = $rank;
             }
         }
@@ -83,7 +83,7 @@ final class NetworkSimplexLayering implements LayerAssignment
      * @param list<string>                                                      $nodeIds
      * @param list<array{tail: string, head: string, minlen: int, weight: int}> $edges
      *
-     * @return list<list<string>>
+     * @return list<array{list<string>, list<array{tail: string, head: string, minlen: int, weight: int}>}>
      */
     private function components(array $nodeIds, array $edges): array
     {
@@ -95,12 +95,21 @@ final class NetworkSimplexLayering implements LayerAssignment
             $parent[$this->findRoot($edge['tail'], $parent)] = $this->findRoot($edge['head'], $parent);
         }
 
-        $grouped = [];
+        $nodesByRoot = [];
         foreach ($nodeIds as $nodeId) {
-            $grouped[$this->findRoot($nodeId, $parent)][] = $nodeId;
+            $nodesByRoot[$this->findRoot($nodeId, $parent)][] = $nodeId;
+        }
+        $edgesByRoot = [];
+        foreach ($edges as $edge) {
+            $edgesByRoot[$this->findRoot($edge['tail'], $parent)][] = $edge;
         }
 
-        return array_values($grouped);
+        $components = [];
+        foreach ($nodesByRoot as $root => $componentNodes) {
+            $components[] = [$componentNodes, $edgesByRoot[$root] ?? []];
+        }
+
+        return $components;
     }
 
     /** @param array<string, string> $parent */
@@ -112,19 +121,6 @@ final class NetworkSimplexLayering implements LayerAssignment
         }
 
         return $node;
-    }
-
-    /**
-     * @param list<string>                                                      $componentNodes
-     * @param list<array{tail: string, head: string, minlen: int, weight: int}> $edges
-     *
-     * @return list<array{tail: string, head: string, minlen: int, weight: int}>
-     */
-    private function edgesWithin(array $componentNodes, array $edges): array
-    {
-        $members = array_flip($componentNodes);
-
-        return array_values(array_filter($edges, static fn (array $edge): bool => isset($members[$edge['tail']], $members[$edge['head']])));
     }
 
     /**
@@ -300,7 +296,7 @@ final class NetworkSimplexLayering implements LayerAssignment
         $counter = 1;
         $this->labelSubtree($nodes[0], $adjacency, $visited, $parentEdge, $subtreeEndByNodeId, $subtreeStartByNodeId, $counter);
 
-        return [$treeEdges, $this->cutValues($nodes, $treeEdges, $edges, $parentEdge, $subtreeEndByNodeId), $parentEdge, $subtreeEndByNodeId, $subtreeStartByNodeId];
+        return [$treeEdges, $this->cutValues($nodes, $edges, $parentEdge, $subtreeEndByNodeId), $parentEdge, $subtreeEndByNodeId, $subtreeStartByNodeId];
     }
 
     /**
@@ -333,14 +329,13 @@ final class NetworkSimplexLayering implements LayerAssignment
      * edges, adjusted by the already-computed cut values of its child tree edges.
      *
      * @param list<string>                                                      $nodes
-     * @param list<int>                                                         $treeEdges
      * @param list<array{tail: string, head: string, minlen: int, weight: int}> $edges
      * @param array<string, int>                                                $parentEdge
      * @param array<string, int>                                                $subtreeEndByNodeId
      *
      * @return array<int, int> tree edge index => cut value
      */
-    private function cutValues(array $nodes, array $treeEdges, array $edges, array $parentEdge, array $subtreeEndByNodeId): array
+    private function cutValues(array $nodes, array $edges, array $parentEdge, array $subtreeEndByNodeId): array
     {
         $incident = $this->incidence($edges);
         $nodeBySubtreeEnd = [];
