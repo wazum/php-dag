@@ -43,9 +43,14 @@ final readonly class LeftToRightRouting implements EdgeRouting
                 continue;
             }
 
-            $targetLaneKey = $targetNode->layer.':'.$targetNode->originalEdgeTargetId;
+            // A chain of a parallel group keeps its own lane all the way, so its
+            // lane keys never match another chain's.
+            /** @infection-ignore-all lane keys are internal bookkeeping; any suffix unique to the chain keeps its lane apart */
+            $ownLaneSuffix = $graph->originalEdgeCount($targetNode->originalEdgeSourceId, $targetNode->originalEdgeTargetId) > 1 ? ':'.spl_object_id($targetNode->originalEdge) : '';
             /** @infection-ignore-all lane keys are internal bookkeeping; mutated key collisions merge lanes that the connection gap-fill renders equivalently */
-            $sourceLaneKey = $targetNode->layer.':'.$targetNode->originalEdgeSourceId;
+            $targetLaneKey = $targetNode->layer.':'.$targetNode->originalEdgeTargetId.$ownLaneSuffix;
+            /** @infection-ignore-all lane keys are internal bookkeeping; mutated key collisions merge lanes that the connection gap-fill renders equivalently */
+            $sourceLaneKey = $targetNode->layer.':'.$targetNode->originalEdgeSourceId.$ownLaneSuffix;
 
             /** @infection-ignore-all either trunk (target-first or source-first) is a valid shared lane */
             $sharedRow = $targetLanes[$targetLaneKey] ?? $sourceLanes[$sourceLaneKey] ?? null;

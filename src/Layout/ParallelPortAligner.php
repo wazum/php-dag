@@ -27,22 +27,31 @@ final readonly class ParallelPortAligner implements Processor
             }
         }
 
-        // Each group gets one try and fixes both its ends, so this settles.
-        // A moved box changes the offsets of its other groups, so the groups
-        // are recomputed after every move.
-        $groups = EdgePorts::of($graph, $this->flowDirection)->misalignedGroups;
-        while (null !== $group = array_shift($groups)) {
-            [$source, $target, $offset] = $group;
-            if (isset($fixedNodeIds[$source->id], $fixedNodeIds[$target->id])) {
-                continue;
+        // Each group gets one try and fixes both its ends, so this settles. A
+        // moved box changes the ports of its own groups and its neighbours'
+        // groups, so those wait for the next round, which recomputes them.
+        do {
+            $staleNodeIds = [];
+            $waiting = false;
+            foreach (EdgePorts::of($graph, $this->flowDirection)->misalignedGroups as [$source, $target, $offset]) {
+                if (isset($fixedNodeIds[$source->id], $fixedNodeIds[$target->id])) {
+                    continue;
+                }
+                if (isset($staleNodeIds[$source->id]) || isset($staleNodeIds[$target->id])) {
+                    $waiting = true;
+                    /** @infection-ignore-all ending the round here only hands the remaining groups to the next round, which recomputes them all */
+                    continue;
+                }
+                $moved = $this->tryShift($graph, $source, $offset, $fixedNodeIds) ? $source : ($this->tryShift($graph, $target, -$offset, $fixedNodeIds) ? $target : null);
+                $fixedNodeIds[$source->id] = $source->id;
+                $fixedNodeIds[$target->id] = $target->id;
+                if (null !== $moved) {
+                    foreach ([...$graph->successors($moved->id), ...$graph->predecessors($moved->id)] as $nodeId) {
+                        $staleNodeIds[$nodeId] = $nodeId;
+                    }
+                }
             }
-            $moved = $this->tryShift($graph, $source, $offset, $fixedNodeIds) || $this->tryShift($graph, $target, -$offset, $fixedNodeIds);
-            $fixedNodeIds[$source->id] = $source->id;
-            $fixedNodeIds[$target->id] = $target->id;
-            if ($moved) {
-                $groups = EdgePorts::of($graph, $this->flowDirection)->misalignedGroups;
-            }
-        }
+        } while ($waiting);
     }
 
     /**
@@ -65,13 +74,55 @@ final readonly class ParallelPortAligner implements Processor
             return false;
         }
 
+        $previousStart = $this->start($node);
+        $this->moveTo($node, $start);
+        if ($this->chainLanesHitABox($graph, $node)) {
+            $this->moveTo($node, $previousStart);
+
+            return false;
+        }
+
+        return true;
+    }
+
+    private function moveTo(LayoutNode $node, int $start): void
+    {
         if (FlowDirection::LeftToRight === $this->flowDirection) {
             $node->row = $start;
         } else {
             $node->column = $start;
         }
+    }
 
-        return true;
+    /**
+     * A long edge leaves through its own port and runs as a lane through the
+     * next layer, so moving its box must not put that lane onto a box there.
+     */
+    private function chainLanesHitABox(LayoutGraph $graph, LayoutNode $node): bool
+    {
+        [$exitPositions, $entryPositions] = EdgePorts::around($graph, $this->flowDirection, $node);
+        $lanes = [];
+        foreach ($graph->outgoingEdges($node->id) as $edge) {
+            if (isset($exitPositions[spl_object_id($edge)]) && $graph->getLayoutNode($edge->targetId()) instanceof DummyLayoutNode) {
+                $lanes[] = [$exitPositions[spl_object_id($edge)], $node->layer + 1];
+            }
+        }
+        foreach ($graph->incomingEdges($node->id) as $edge) {
+            if (isset($entryPositions[spl_object_id($edge)]) && $graph->getLayoutNode($edge->sourceId()) instanceof DummyLayoutNode) {
+                $lanes[] = [$entryPositions[spl_object_id($edge)], $node->layer - 1];
+            }
+        }
+
+        foreach ($lanes as [$position, $layer]) {
+            foreach ($graph->layerIndex()[$layer] ?? [] as $nodeId) {
+                $box = $graph->getLayoutNode($nodeId);
+                if ($box instanceof RealLayoutNode && $position >= $this->start($box) && $position < $this->end($box)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private function start(LayoutNode $node): int

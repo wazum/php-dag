@@ -83,6 +83,8 @@ final class GoldenFileTest extends TestCase
         yield 'labelled_parallel_pair' => ['labelled_parallel_pair', Graph::fromDot('digraph { a -> b [label="one"]; a -> b [label="two"] }'), $topToBottom];
         yield 'labelled_parallel_pair_beside_single_edge' => ['labelled_parallel_pair_beside_single_edge', Graph::fromDot('digraph { a -> b [label="one"]; a -> b [label="two"]; a -> c }'), $topToBottom];
         yield 'two_labelled_parallel_pairs' => ['two_labelled_parallel_pairs', Graph::fromDot('digraph { a -> b [label="p"]; a -> b [label="q"]; a -> c [label="x"]; a -> c [label="y"] }'), $topToBottom];
+        yield 'parallel_long_edges' => ['parallel_long_edges', Graph::fromDot('digraph { a -> c; a -> c; a -> b; b -> c }'), $topToBottom];
+        yield 'parallel_groups_across_three_gaps' => ['parallel_groups_across_three_gaps', Graph::fromDot('digraph { n2 -> n3; n2 -> n3; n3 -> n4; n0 -> n4; n1 -> n3 [label="llll"]; n1 -> n3 [label="llll"]; n0 -> n1; n0 -> n1; n0 -> n1; n3 -> n4; n3 -> n4; n3 -> n4; n3 -> n4 }'), $topToBottom];
         yield 'highlighted_path' => ['highlighted_path', self::highlightedPath(), $topToBottom];
         yield 'cycle' => ['cycle', self::cycle(), $topToBottom];
         yield 'disconnected_components' => ['disconnected_components', self::disconnectedComponents(), $topToBottom];
@@ -105,6 +107,7 @@ final class GoldenFileTest extends TestCase
         yield 'left_to_right_parallel_pair_converging_with_single_edge' => ['left_to_right_parallel_pair_converging_with_single_edge', Graph::fromDot('digraph { a -> c; b -> c; b -> c }'), $leftToRight];
         yield 'left_to_right_labelled_parallel_pair_beside_single_edge' => ['left_to_right_labelled_parallel_pair_beside_single_edge', Graph::fromDot('digraph { a -> b [label="one"]; a -> b [label="two"]; a -> c }'), $leftToRight];
         yield 'left_to_right_two_labelled_parallel_pairs' => ['left_to_right_two_labelled_parallel_pairs', Graph::fromDot('digraph { a -> b [label="p"]; a -> b [label="q"]; a -> c [label="x"]; a -> c [label="y"] }'), $leftToRight];
+        yield 'left_to_right_parallel_long_edges' => ['left_to_right_parallel_long_edges', Graph::fromDot('digraph { a -> c; a -> c; a -> b; b -> c }'), $leftToRight];
         yield 'left_to_right_cluster' => ['left_to_right_cluster', self::clusteredPipeline(), $leftToRight];
         yield 'left_to_right_cluster_evicts' => ['left_to_right_cluster_evicts', self::clusterEvictsForeign(), $leftToRight];
     }

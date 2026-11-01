@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Labels on the outer branches of a fan-out no longer push sibling boxes far apart; room is only made beside the lane where a label is drawn, and parents move with their children.
 - A long edge leaving a lifted fan-out now bends on the bar row instead of crossing the label row.
 - A fan-out label beside a long-edge sibling stays next to its own edge.
+- Parallel long edges (`a -> c` twice, spanning layers) keep separate lanes with their own ports and arrowheads instead of merging into one lane, in both flow directions.
+- A single edge through a box's shared trunk port lines up with its other end when one of the boxes can move without putting a long-edge lane onto another box, so it no longer jogs one cell; a long edge entering a box with a trunk port uses that port.
 - Labels on parallel edges sit on their own lane in both flow directions, so each label belongs to exactly one lane: they no longer overwrite an arrowhead, get cut off, or land beside an unrelated edge. Labelled parallel lanes are spaced so neighbouring labels keep two blank cells apart.
 - Ports line up across a parallel group: each set of ports sits straight across from the box it leads to, and one end of the group moves sideways when that turns every lane into a straight line, so parallel edges no longer bend for a one-cell offset.
 - Parallel edges attach inside both boxes in both flow directions: a box grows until every parallel edge has its own port (single edges share one trunk port), ports follow the order of the far ends, and bending parallel lanes nest without crossing. Previously lanes could leave past a box border, replace a corner, or disappear in left-to-right flow.

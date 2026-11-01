@@ -8,7 +8,9 @@ use PhpDag\Graph\Edge;
 use PhpDag\Graph\Graph;
 use PhpDag\Graph\Group;
 use PhpDag\Graph\Node;
+use PhpDag\Layout\DummyLayoutNode;
 use PhpDag\Layout\FlowDirection;
+use PhpDag\Layout\LayoutEdge;
 use PhpDag\Layout\LayoutGraph;
 use PhpDag\Layout\ParallelPortAligner;
 use PhpDag\Layout\RealLayoutNode;
@@ -129,6 +131,38 @@ final class ParallelPortAlignerTest extends TestCase
         foreach ($expectedColumns as $nodeId => $column) {
             self::assertSame($column, $graph->getLayoutNode($nodeId)->column, $nodeId);
         }
+    }
+
+    #[Test]
+    public function undoesAMoveThatWouldRunALongEdgeLaneOntoABoxAndMovesTheOtherEndInstead(): void
+    {
+        $graph = new LayoutGraph();
+        $boxes = ['a' => [0, 4, 7], 'b' => [1, 10, 5], 'c' => [2, 0, 5]];
+        foreach ($boxes as $nodeId => [$layer, $column, $width]) {
+            $node = new RealLayoutNode($nodeId, new Node($nodeId, $nodeId));
+            $node->layer = $layer;
+            $node->row = 6 * $layer;
+            $node->column = $column;
+            $node->minBoxWidth = $width;
+            $graph->addNode($node);
+        }
+        foreach (['first' => 0, 'second' => 2] as $dummyId => $column) {
+            $dummy = new DummyLayoutNode($dummyId, 'a', 'c');
+            $dummy->layer = 1;
+            $dummy->row = 6;
+            $dummy->column = $column;
+            $graph->addNode($dummy);
+            $graph->addEdge(new LayoutEdge(new Edge('a', $dummyId)));
+            $graph->addEdge(new LayoutEdge(new Edge($dummyId, 'c')));
+        }
+        $graph->addEdge(new LayoutEdge(new Edge('a', 'b')));
+        $graph->buildLayerIndex();
+        $graph->setLayerOrder(1, ['first', 'second', 'b']);
+
+        (new ParallelPortAligner(FlowDirection::TopToBottom, 2))->process($graph);
+
+        self::assertSame(4, $graph->getLayoutNode('a')->column, 'moving a three columns right would run its second lane down column 10, the first column of b');
+        self::assertSame(7, $graph->getLayoutNode('b')->column, 'b moves three columns left instead, under the trunk port of a');
     }
 
     /** @return iterable<string, array{list<string>, array<string, int>}> */

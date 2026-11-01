@@ -50,9 +50,18 @@ final class LayoutGraph
     /** @var list<Edge> */
     private array $originalEdges = [];
 
+    /** @var array<string, array<string, int>> */
+    private array $originalEdgeCounts = [];
+
     public function storeOriginalEdge(Edge $edge): void
     {
         $this->originalEdges[] = $edge;
+        $this->originalEdgeCounts[$edge->sourceId][$edge->targetId] = $this->originalEdgeCount($edge->sourceId, $edge->targetId) + 1;
+    }
+
+    public function originalEdgeCount(string $sourceId, string $targetId): int
+    {
+        return $this->originalEdgeCounts[$sourceId][$targetId] ?? 0;
     }
 
     /** @return list<Edge> */
@@ -69,14 +78,9 @@ final class LayoutGraph
      */
     public function singleLabelledEdges(): array
     {
-        $pairCounts = [];
-        foreach ($this->originalEdges as $edge) {
-            $pairCounts[$edge->sourceId][$edge->targetId] = ($pairCounts[$edge->sourceId][$edge->targetId] ?? 0) + 1;
-        }
-
         $edges = [];
         foreach ($this->originalEdges as $edge) {
-            if (null !== $edge->label && 1 === $pairCounts[$edge->sourceId][$edge->targetId]) {
+            if (null !== $edge->label && 1 === $this->originalEdgeCount($edge->sourceId, $edge->targetId)) {
                 $edges[] = $edge;
             }
         }

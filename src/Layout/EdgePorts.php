@@ -50,7 +50,7 @@ final readonly class EdgePorts
         $extents = [];
         foreach ([...array_keys($exitSides), ...array_keys($entrySides)] as $nodeId) {
             $sideExtents = array_filter(
-                [self::sideExtent($exitSides[$nodeId] ?? [], $alongRows), self::sideExtent($entrySides[$nodeId] ?? [], $alongRows)],
+                [self::sideExtent($exitSides[$nodeId][1] ?? [], $alongRows), self::sideExtent($entrySides[$nodeId][1] ?? [], $alongRows)],
                 static fn (?int $extent): bool => null !== $extent,
             );
             if ([] !== $sideExtents) {
@@ -59,6 +59,30 @@ final readonly class EdgePorts
         }
 
         return $extents;
+    }
+
+    /**
+     * The exit and entry ports of one box's own edges, worked out from that
+     * box's edges alone; cheaper than {@see of()} when only one box moved.
+     *
+     * @return array{array<int, int>, array<int, int>} exit and entry positions, keyed by spl_object_id of the edge
+     */
+    public static function around(LayoutGraph $graph, FlowDirection $flowDirection, LayoutNode $node): array
+    {
+        $alongRows = FlowDirection::LeftToRight === $flowDirection;
+        [$exitSides, $entrySides] = self::sides(self::pairs($graph, $node));
+        $exitPositions = [];
+        $entryPositions = [];
+        $trunkPositions = [];
+        $trunkSpans = [];
+        if (isset($exitSides[$node->id])) {
+            self::assign($node, $exitSides[$node->id][1], $alongRows, $exitPositions, $trunkPositions, $trunkSpans);
+        }
+        if (isset($entrySides[$node->id])) {
+            self::assign($node, $entrySides[$node->id][1], $alongRows, $entryPositions, $trunkPositions, $trunkSpans);
+        }
+
+        return [$exitPositions, $entryPositions];
     }
 
     public static function of(LayoutGraph $graph, FlowDirection $flowDirection): self
@@ -72,11 +96,11 @@ final readonly class EdgePorts
         $trunkEntryPositions = [];
         $exitTrunkSpans = [];
         $entryTrunkSpans = [];
-        foreach ($exitSides as $sidePairs) {
-            self::assign($sidePairs[0][0], $sidePairs, 1, $alongRows, $exitPositions, $trunkExitPositions, $exitTrunkSpans);
+        foreach ($exitSides as [$node, $groups]) {
+            self::assign($node, $groups, $alongRows, $exitPositions, $trunkExitPositions, $exitTrunkSpans);
         }
-        foreach ($entrySides as $sidePairs) {
-            self::assign($sidePairs[0][1], $sidePairs, 0, $alongRows, $entryPositions, $trunkEntryPositions, $entryTrunkSpans);
+        foreach ($entrySides as [$node, $groups]) {
+            self::assign($node, $groups, $alongRows, $entryPositions, $trunkEntryPositions, $entryTrunkSpans);
         }
 
         $bendDepths = [];
@@ -133,7 +157,30 @@ final readonly class EdgePorts
             $extraLanesByGap[$source->layer] = max($extraLanesByGap[$source->layer] ?? 0, $neededLanes - $availableLanes);
         }
 
+        foreach ($pairs as [$source, $target, $edges]) {
+            if (1 === count($edges)
+                && $source instanceof RealLayoutNode
+                && $target instanceof RealLayoutNode
+                && (isset($trunkExitPositions[$source->id]) || isset($trunkEntryPositions[$target->id]))
+                && 1 === self::singleCount($exitSides[$source->id][1])
+                && 1 === self::singleCount($entrySides[$target->id][1])
+            ) {
+                $offset = ($trunkEntryPositions[$target->id] ?? self::center($target, $alongRows)) - ($trunkExitPositions[$source->id] ?? self::center($source, $alongRows));
+                if (0 !== $offset) {
+                    $misalignedGroups[] = [$source, $target, $offset];
+                }
+            }
+        }
+
         return new self($exitPositions, $entryPositions, $bendDepths, $trunkExitPositions, $trunkEntryPositions, $extraLanesByGap, $misalignedGroups);
+    }
+
+    /**
+     * @param array<array{LayoutNode, list<LayoutEdge>}> $groups
+     */
+    private static function singleCount(array $groups): int
+    {
+        return count(array_filter($groups, static fn (array $group): bool => 1 === count($group[1])));
     }
 
     /**
@@ -142,11 +189,12 @@ final readonly class EdgePorts
      *
      * @return list<array{LayoutNode, LayoutNode, non-empty-list<LayoutEdge>, bool}>
      */
-    private static function pairs(LayoutGraph $graph): array
+    private static function pairs(LayoutGraph $graph, ?LayoutNode $onlyAround = null): array
     {
         $edgesBySourceAndTarget = [];
         $edgesByTargetAndSource = [];
-        foreach ($graph->edges() as $edge) {
+        $edges = null === $onlyAround ? $graph->edges() : [...$graph->outgoingEdges($onlyAround->id), ...$graph->incomingEdges($onlyAround->id)];
+        foreach ($edges as $edge) {
             if (!$edge->reversed) {
                 $edgesBySourceAndTarget[$edge->sourceId()][$edge->targetId()][] = $edge;
                 $edgesByTargetAndSource[$edge->targetId()][$edge->sourceId()][] = $edge;
@@ -169,33 +217,47 @@ final readonly class EdgePorts
     }
 
     /**
-     * The pairs leaving each box's exit side and entering each box's entry
-     * side, keyed by box id.
+     * Each box's exit side and entry side with the edge groups attached there,
+     * each group given by its far end and its edges, keyed by box id. The long
+     * edges of a parallel group run through separate dummy chains, so their
+     * first (or last) segments end on different dummies; they still form one
+     * group on the box side they share.
      *
      * @param list<array{LayoutNode, LayoutNode, non-empty-list<LayoutEdge>, bool}> $pairs
      *
-     * @return array{array<string, non-empty-list<array{LayoutNode, LayoutNode, non-empty-list<LayoutEdge>, bool}>>, array<string, non-empty-list<array{LayoutNode, LayoutNode, non-empty-list<LayoutEdge>, bool}>>}
+     * @return array{array<string, array{LayoutNode, array<string, array{LayoutNode, list<LayoutEdge>}>}>, array<string, array{LayoutNode, array<string, array{LayoutNode, list<LayoutEdge>}>}>}
      */
     private static function sides(array $pairs): array
     {
-        $exitSides = [];
-        $entrySides = [];
-        foreach ($pairs as $pair) {
-            $exitSides[$pair[0]->id][] = $pair;
-            $entrySides[$pair[1]->id][] = $pair;
+        $exitGroups = [];
+        $entryGroups = [];
+        foreach ($pairs as [$source, $target, $edges]) {
+            self::attach($exitGroups, $source, $target, $target instanceof DummyLayoutNode ? $target->originalEdgeTargetId : $target->id, $edges);
+            self::attach($entryGroups, $target, $source, $source instanceof DummyLayoutNode ? $source->originalEdgeSourceId : $source->id, $edges);
         }
 
-        return [$exitSides, $entrySides];
+        return [$exitGroups, $entryGroups];
     }
 
     /**
-     * @param list<array{LayoutNode, LayoutNode, non-empty-list<LayoutEdge>, bool}> $pairs
+     * @param array<string, array{LayoutNode, array<string, array{LayoutNode, list<LayoutEdge>}>}> $groups
+     * @param non-empty-list<LayoutEdge>                                                           $edges
      */
-    private static function portCount(array $pairs): int
+    private static function attach(array &$groups, LayoutNode $near, LayoutNode $far, string $groupKey, array $edges): void
+    {
+        $side = $groups[$near->id][1] ?? [];
+        $side[$groupKey] = [$far, [...$side[$groupKey][1] ?? [], ...$edges]];
+        $groups[$near->id] = [$near, $side];
+    }
+
+    /**
+     * @param array<array{LayoutNode, list<LayoutEdge>}> $groups
+     */
+    private static function portCount(array $groups): int
     {
         $parallelPorts = 0;
         $hasTrunk = false;
-        foreach ($pairs as [, , $edges]) {
+        foreach ($groups as [, $edges]) {
             if (count($edges) > 1) {
                 $parallelPorts += count($edges);
             } else {
@@ -212,12 +274,12 @@ final readonly class EdgePorts
      * blank cells to the next one. The spacing stays even, so the box keeps an
      * odd width and its content stays centred.
      *
-     * @param list<array{LayoutNode, LayoutNode, non-empty-list<LayoutEdge>, bool}> $pairs
+     * @param array<array{LayoutNode, list<LayoutEdge>}> $groups
      */
-    private static function spacing(array $pairs, bool $alongRows): int
+    private static function spacing(array $groups, bool $alongRows): int
     {
         $labelWidths = [];
-        foreach ($pairs as [, , $edges]) {
+        foreach ($groups as [, $edges]) {
             if (count($edges) > 1 && !$alongRows) {
                 array_push($labelWidths, ...self::labelWidths($edges));
             }
@@ -249,36 +311,35 @@ final readonly class EdgePorts
     }
 
     /**
-     * @param list<array{LayoutNode, LayoutNode, non-empty-list<LayoutEdge>, bool}> $pairs
+     * @param array<array{LayoutNode, list<LayoutEdge>}> $groups
      */
-    private static function sideExtent(array $pairs, bool $alongRows): ?int
+    private static function sideExtent(array $groups, bool $alongRows): ?int
     {
-        $portCount = self::portCount($pairs);
+        $portCount = self::portCount($groups);
 
-        return 0 === $portCount ? null : self::spacing($pairs, $alongRows) * ($portCount - 1) + 3;
+        return 0 === $portCount ? null : self::spacing($groups, $alongRows) * ($portCount - 1) + 3;
     }
 
     /**
-     * @param non-empty-list<array{LayoutNode, LayoutNode, non-empty-list<LayoutEdge>, bool}> $pairs
-     * @param 0|1                                                                             $farEnd         index of the far end within each pair
-     * @param array<int, int>                                                                 $edgePositions
-     * @param array<string, int>                                                              $trunkPositions
-     * @param array<string, array{int, int}>                                                  $trunkSpans     positions the shared trunk's bar runs across
+     * @param array<array{LayoutNode, list<LayoutEdge>}> $groups         far end and edges of each group on this side
+     * @param array<int, int>                            $edgePositions
+     * @param array<string, int>                         $trunkPositions
+     * @param array<string, array{int, int}>             $trunkSpans     positions the shared trunk's bar runs across
      */
-    private static function assign(LayoutNode $node, array $pairs, int $farEnd, bool $alongRows, array &$edgePositions, array &$trunkPositions, array &$trunkSpans): void
+    private static function assign(LayoutNode $node, array $groups, bool $alongRows, array &$edgePositions, array &$trunkPositions, array &$trunkSpans): void
     {
-        $portCount = self::portCount($pairs);
+        $portCount = self::portCount($groups);
         if (0 === $portCount) {
             return;
         }
 
         $slots = [];
         $trunkFarCenters = [];
-        foreach ($pairs as $pair) {
-            if (count($pair[2]) > 1) {
-                $slots[] = [self::center($pair[$farEnd], $alongRows), $pair[2]];
+        foreach ($groups as [$farEnd, $edges]) {
+            if (count($edges) > 1) {
+                $slots[] = [self::center($farEnd, $alongRows), $edges];
             } else {
-                $trunkFarCenters[] = self::center($pair[$farEnd], $alongRows);
+                $trunkFarCenters[] = self::center($farEnd, $alongRows);
             }
         }
         if ([] !== $trunkFarCenters) {
@@ -286,7 +347,7 @@ final readonly class EdgePorts
         }
         usort($slots, static fn (array $left, array $right): int => $left[0] <=> $right[0]);
 
-        $spacing = self::spacing($pairs, $alongRows);
+        $spacing = self::spacing($groups, $alongRows);
         $firstPositions = self::firstPortPositions(
             $slots,
             $spacing,

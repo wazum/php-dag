@@ -149,6 +149,26 @@ final class EdgePortsTest extends TestCase
         self::assertSame([0 => 0], EdgePorts::of($graph, FlowDirection::TopToBottom)->extraLanesByGap);
     }
 
+    #[Test]
+    public function reportsASingleEdgeThroughATrunkPortThatDoesNotLineUp(): void
+    {
+        $graph = $this->placedGraph([
+            'a' => [0, 0, 7], 'x' => [0, 20, 5], 'y' => [0, 30, 5],
+            'c' => [1, 0, 5], 'b' => [1, 10, 7], 'z' => [1, 40, 5],
+        ]);
+        foreach ([['a', 'b'], ['a', 'b'], ['a', 'c'], ['x', 'b'], ['y', 'z']] as [$sourceId, $targetId]) {
+            $graph->addEdge(new LayoutEdge(new Edge($sourceId, $targetId)));
+        }
+
+        $ports = EdgePorts::of($graph, FlowDirection::TopToBottom);
+
+        self::assertSame(
+            [['a', 'b', 8], ['a', 'c', 1], ['x', 'b', -7]],
+            array_map(static fn (array $group): array => [$group[0]->id, $group[1]->id, $group[2]], $ports->misalignedGroups),
+            'the pair runs 3,5 to 11,13; the trunk of a sits at 1 above c centred at 2; x centred at 22 enters the trunk of b at 15; y to z uses no trunk',
+        );
+    }
+
     /**
      * @param array<string, array{int, int, int}> $nodes id => [layer, column, minimum box width]
      */

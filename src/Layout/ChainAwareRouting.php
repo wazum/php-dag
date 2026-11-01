@@ -38,7 +38,7 @@ final readonly class ChainAwareRouting implements EdgeRouting
         $sourceLanes = [];
 
         foreach ($chains as [$chainSourceId, $chainTargetId, $chainEdges]) {
-            $this->routeChain($graph, $chainSourceId, $chainTargetId, $chainEdges, $layerMaxHeights, $groupEntryCeilings, $preferredColumns, $laneColumns, $targetLanes, $sourceLanes);
+            $this->routeChain($graph, $ports, $chainSourceId, $chainTargetId, $chainEdges, $layerMaxHeights, $groupEntryCeilings, $preferredColumns, $laneColumns, $targetLanes, $sourceLanes);
             foreach ($chainEdges as $chainEdge) {
                 /** @infection-ignore-all only probed with isset(), so the stored value is never read */
                 $routedEdgeIds[spl_object_id($chainEdge)] = true;
@@ -185,22 +185,26 @@ final readonly class ChainAwareRouting implements EdgeRouting
      * @param array<string, int>    $targetLanes
      * @param array<string, int>    $sourceLanes
      */
-    private function routeChain(LayoutGraph $graph, string $chainSourceId, string $chainTargetId, array $chainEdges, array $layerMaxHeights, array $groupEntryCeilings, array &$preferredColumns, array &$laneColumns, array &$targetLanes, array &$sourceLanes): void
+    private function routeChain(LayoutGraph $graph, EdgePorts $ports, string $chainSourceId, string $chainTargetId, array $chainEdges, array $layerMaxHeights, array $groupEntryCeilings, array &$preferredColumns, array &$laneColumns, array &$targetLanes, array &$sourceLanes): void
     {
         $corridorLaneColumn = $this->corridorLaneColumn($graph, $chainEdges);
+        // A chain of a parallel group keeps its own lane all the way, so its
+        // lane keys never match another chain's.
+        /** @infection-ignore-all lane keys are internal bookkeeping; any suffix unique to the chain keeps its lane apart */
+        $ownLaneSuffix = isset($ports->exitPositions[spl_object_id($chainEdges[0])]) ? ':'.spl_object_id($chainEdges[0]) : '';
 
         foreach ($chainEdges as $edge) {
             $sourceNode = $graph->getLayoutNode($edge->sourceId());
             $targetNode = $graph->getLayoutNode($edge->targetId());
 
-            $exitColumn = $preferredColumns[$sourceNode->id] ?? $sourceNode->column + intdiv($sourceNode->boxWidth(), 2);
+            $exitColumn = $ports->exitPositions[spl_object_id($edge)] ?? $preferredColumns[$sourceNode->id] ?? $sourceNode->column + intdiv($sourceNode->boxWidth(), 2);
             /** @infection-ignore-all boxHeight() is always positive; coalesce fallback is defensive; exit row validated by integration tests */
             $exitRow = $sourceNode->row + ($layerMaxHeights[$sourceNode->layer] ?? $sourceNode->boxHeight());
             $entryRow = $targetNode->row - 1;
             $bendLift = $graph->divergingLift($sourceNode->id);
 
             if (!$targetNode instanceof DummyLayoutNode) {
-                $targetColumn = $this->alignedTargetColumn($exitColumn, $targetNode, $graph);
+                $targetColumn = $ports->entryPositions[spl_object_id($edge)] ?? $ports->trunkEntryPositions[$targetNode->id] ?? $this->alignedTargetColumn($exitColumn, $targetNode, $graph);
                 $this->routeDirectEdge($edge, $exitRow, $exitColumn, $entryRow, $targetColumn, $groupEntryCeilings[$targetNode->id] ?? null, $bendLift);
                 /** @infection-ignore-all only consumed when the real target later sources another chain; first or last aligned column is a valid exit that the connection gap-fill renders equivalently */
                 $preferredColumns[$targetNode->id] ??= $targetColumn;
@@ -217,9 +221,9 @@ final readonly class ChainAwareRouting implements EdgeRouting
             }
 
             /** @infection-ignore-all lane keys are internal bookkeeping; mutated key collisions merge lanes that the connection gap-fill renders equivalently */
-            $targetLaneKey = $targetNode->layer.':'.$chainTargetId;
+            $targetLaneKey = $targetNode->layer.':'.$chainTargetId.$ownLaneSuffix;
             /** @infection-ignore-all lane keys are internal bookkeeping; mutated key collisions merge lanes that the connection gap-fill renders equivalently */
-            $sourceLaneKey = $targetNode->layer.':'.$chainSourceId;
+            $sourceLaneKey = $targetNode->layer.':'.$chainSourceId.$ownLaneSuffix;
 
             /** @infection-ignore-all either trunk (target-first or source-first) is a valid shared lane */
             $sharedColumn = $targetLanes[$targetLaneKey] ?? $sourceLanes[$sourceLaneKey] ?? null;
