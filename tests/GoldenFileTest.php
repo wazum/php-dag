@@ -123,6 +123,9 @@ final class GoldenFileTest extends TestCase
         yield 'late_sources_beside_a_chain' => ['late_sources_beside_a_chain', Graph::fromDot('digraph { fxxx -> hxx; cxxx -> hxx; gxxxx -> ax; gxxxx -> bxxx; ex -> hxx; ax -> fxxx }'), $topToBottom];
         yield 'two_feedback_edges_from_one_node' => ['two_feedback_edges_from_one_node', Graph::fromDot('digraph { n5 -> n4; n0 -> n1; n5 -> n1; n5 -> n0; n0 -> n5; n2 -> n5; n2 -> n0; n0 -> n2 }'), $topToBottom];
         yield 'feedback_edge_into_a_fan_out_child' => ['feedback_edge_into_a_fan_out_child', Graph::fromDot('digraph { n0 -> n5; n1 -> n0; n0 -> n1; n0 -> n4; n2 -> n5; n4 -> n1; n4 -> n2 }'), $topToBottom];
+        yield 'long_labelled_edge_keeps_its_lane' => ['long_labelled_edge_keeps_its_lane', Graph::fromDot('digraph { a -> b; b -> c; a -> c [label="skips b"] }'), $topToBottom];
+        yield 'self_loop' => ['self_loop', Graph::fromDot('digraph { a -> b; b -> b }'), $topToBottom];
+        yield 'fast_quality_keeps_a_late_source_on_top' => ['fast_quality_keeps_a_late_source_on_top', Graph::fromDot('digraph { a -> b; b -> c; c -> d; x -> d }'), AsciiDag::builder()->quality(LayoutQuality::Fast)->build()];
         yield 'left_to_right_labels_across_group_borders' => ['left_to_right_labels_across_group_borders', Graph::fromDot('digraph { subgraph cluster_build { label="Build"; lint; test } checkout -> lint [label="src"]; lint -> test; test -> deploy [label="ok"] }'), $leftToRight];
         yield 'left_to_right_cluster' => ['left_to_right_cluster', self::clusteredPipeline(), $leftToRight];
         yield 'left_to_right_cluster_evicts' => ['left_to_right_cluster_evicts', self::clusterEvictsForeign(), $leftToRight];

@@ -19,6 +19,27 @@ use PHPUnit\Framework\TestCase;
 final class AsciiDagTest extends TestCase
 {
     #[Test]
+    public function rendersEveryNodeOfAThousandNodeGraph(): void
+    {
+        $graph = new Graph();
+        for ($index = 0; $index < 1000; ++$index) {
+            $graph->addNode(new Node('n'.$index, 'Node '.$index));
+            if ($index > 0) {
+                $graph->addEdge(new Edge('n'.max(0, $index - 1 - $index % 4), 'n'.$index));
+            }
+            if ($index > 5) {
+                $graph->addEdge(new Edge('n'.($index - 5), 'n'.$index));
+            }
+        }
+
+        $output = AsciiDag::default()->render($graph);
+
+        for ($index = 0; $index < 1000; ++$index) {
+            self::assertStringContainsString('│ Node '.$index.' │', $output);
+        }
+    }
+
+    #[Test]
     public function rendersLinearChain(): void
     {
         $graph = new Graph();
