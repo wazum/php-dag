@@ -271,7 +271,7 @@ final readonly class BrandesKopfPositioning implements NodePositioning
         $neighbors = $vertical ? $graph->successors($nodeId) : $graph->predecessors($nodeId);
         $layer = $graph->getLayoutNode($nodeId)->layer;
         $present = array_values(array_filter(
-            $neighbors,
+            array_unique($neighbors),
             static fn (string $neighborId): bool => isset($positionByNodeId[$neighborId]) && 1 === abs($graph->getLayoutNode($neighborId)->layer - $layer),
         ));
         usort($present, static fn (string $leftNodeId, string $rightNodeId): int => $positionByNodeId[$leftNodeId] <=> $positionByNodeId[$rightNodeId]);

@@ -22,7 +22,7 @@ final readonly class LabelReserver implements Processor
         foreach ($divergingLifts as $sourceId => $lift) {
             $graph->reserveDivergingLift($sourceId, $lift);
         }
-        $this->shiftLayers($graph, $this->calculateGapShifts($graph, $divergingRows));
+        $graph->insertGapLanes($this->calculateGapShifts($graph, $divergingRows), FlowDirection::TopToBottom);
         $this->ensureOuterLabelMargins($graph);
         $this->reserveCorridorSpans($graph);
     }
@@ -365,32 +365,6 @@ final readonly class LabelReserver implements Processor
         }
 
         return $inDegrees;
-    }
-
-    /** @param array<int, int> $gapShifts */
-    private function shiftLayers(LayoutGraph $graph, array $gapShifts): void
-    {
-        $layerIndex = $graph->layerIndex();
-        $layerNumbers = array_keys($layerIndex);
-        /** @infection-ignore-all layerIndex() already returns ksorted keys; sort is defensive */
-        sort($layerNumbers);
-
-        $cumulativeShift = 0;
-        foreach ($layerNumbers as $layerNumber) {
-            /** @infection-ignore-all No gap exists before the first layer; >= adds gapShifts[-1] ?? 0 which is 0 */
-            if ($layerNumber > $layerNumbers[0]) {
-                $cumulativeShift += $gapShifts[$layerNumber - 1] ?? 0;
-            }
-
-            /** @infection-ignore-all cumulativeShift is always >= 0; skip is a no-op optimization (row += 0) */
-            if (0 === $cumulativeShift) {
-                continue;
-            }
-
-            foreach ($layerIndex[$layerNumber] as $nodeId) {
-                $graph->getLayoutNode($nodeId)->row += $cumulativeShift;
-            }
-        }
     }
 
     private function ensureOuterLabelMargins(LayoutGraph $graph): void

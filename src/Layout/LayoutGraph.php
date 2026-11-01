@@ -256,6 +256,28 @@ final class LayoutGraph
         ksort($this->layerIndex);
     }
 
+    /**
+     * Widens layer gaps: extra rows in top-to-bottom flow, extra columns in
+     * left-to-right flow.
+     *
+     * @param array<int, int> $lanesByGap keyed by the layer before the gap
+     */
+    public function insertGapLanes(array $lanesByGap, FlowDirection $flowDirection): void
+    {
+        $shift = 0;
+        foreach ($this->layerIndex as $layer => $nodeIds) {
+            $shift += $lanesByGap[$layer - 1] ?? 0;
+            foreach ($nodeIds as $nodeId) {
+                $node = $this->getLayoutNode($nodeId);
+                if (FlowDirection::LeftToRight === $flowDirection) {
+                    $node->column += $shift;
+                } else {
+                    $node->row += $shift;
+                }
+            }
+        }
+    }
+
     /** @return array<int, list<string>> */
     public function layerIndex(): array
     {

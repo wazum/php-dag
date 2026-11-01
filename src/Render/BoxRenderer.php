@@ -24,23 +24,24 @@ final readonly class BoxRenderer implements ElementRenderer
         foreach ($graph->nodeIds() as $nodeId) {
             $layoutNode = $graph->getLayoutNode($nodeId);
             if ($layoutNode instanceof RealLayoutNode) {
-                $this->renderNode($canvas, $layoutNode->node, $layoutNode->row, $layoutNode->column, $layoutNode->node->color, $layoutNode->boxHeight());
+                $this->renderNode($canvas, $layoutNode->node, $layoutNode->row, $layoutNode->column, $layoutNode->node->color, $layoutNode->boxWidth(), $layoutNode->boxHeight());
             }
         }
     }
 
-    private function renderNode(Canvas $canvas, Node $node, int $row, int $column, ?AnsiColor $color, int $boxHeight): void
+    private function renderNode(Canvas $canvas, Node $node, int $row, int $column, ?AnsiColor $color, int $boxWidth, int $boxHeight): void
     {
-        $contentColumn = $column + $node->style->borderStyle->thickness() + Node::HORIZONTAL_PADDING;
-        // Centre the content vertically when the box was grown beyond its natural
-        // height to host edge ports (left-to-right parallel edges).
+        // Centre the content when the box was grown beyond its natural size to
+        // host one port per edge (parallel edges).
+        $horizontalOffset = intdiv($boxWidth - $node->boxWidth(), 2);
         $verticalOffset = intdiv($boxHeight - $node->boxHeight(), 2);
+        $contentColumn = $column + $node->style->borderStyle->thickness() + Node::HORIZONTAL_PADDING + $horizontalOffset;
         $contentRow = $row + $node->style->borderStyle->thickness() + $verticalOffset;
         $contentWidth = $node->contentWidth();
 
-        $this->paintFootprint($canvas, $node, $row, $column, $boxHeight);
-        $this->renderBorder($canvas, $node, $row, $column, $color, $boxHeight);
-        $this->renderBadge($canvas, $node, $row, $column, $color);
+        $this->paintFootprint($canvas, $row, $column, $boxWidth, $boxHeight);
+        $this->renderBorder($canvas, $node, $row, $column, $color, $boxWidth, $boxHeight);
+        $this->renderBadge($canvas, $node, $row, $column, $color, $boxWidth);
         $this->renderTitle($canvas, $node, $contentRow, $contentColumn, $contentWidth, $color);
         $this->renderBody($canvas, $node, $contentRow + 1, $contentColumn, $contentWidth, $color);
     }
@@ -49,16 +50,16 @@ final readonly class BoxRenderer implements ElementRenderer
      * Blanks the full box area at box z-index so lower-z elements (edge
      * segments routed underneath) cannot bleed through padding cells.
      */
-    private function paintFootprint(Canvas $canvas, Node $node, int $row, int $column, int $boxHeight): void
+    private function paintFootprint(Canvas $canvas, int $row, int $column, int $boxWidth, int $boxHeight): void
     {
         for ($footprintRow = $row; $footprintRow < $row + $boxHeight; ++$footprintRow) {
-            for ($footprintColumn = $column; $footprintColumn < $column + $node->boxWidth(); ++$footprintColumn) {
+            for ($footprintColumn = $column; $footprintColumn < $column + $boxWidth; ++$footprintColumn) {
                 $canvas->putCharacter($footprintRow, $footprintColumn, ' ', self::Z_INDEX);
             }
         }
     }
 
-    private function renderBorder(Canvas $canvas, Node $node, int $row, int $column, ?AnsiColor $color, int $boxHeight): void
+    private function renderBorder(Canvas $canvas, Node $node, int $row, int $column, ?AnsiColor $color, int $boxWidth, int $boxHeight): void
     {
         if (BorderStyle::None === $node->style->borderStyle) {
             return;
@@ -67,7 +68,7 @@ final readonly class BoxRenderer implements ElementRenderer
         $canvas->box(
             $row,
             $column,
-            $node->boxWidth(),
+            $boxWidth,
             $boxHeight,
             glyphs: $node->style->borderStyle->glyphs($this->unicodeGlyphs),
             zIndex: self::Z_INDEX,
@@ -75,7 +76,7 @@ final readonly class BoxRenderer implements ElementRenderer
         );
     }
 
-    private function renderBadge(Canvas $canvas, Node $node, int $row, int $column, ?AnsiColor $color): void
+    private function renderBadge(Canvas $canvas, Node $node, int $row, int $column, ?AnsiColor $color, int $boxWidth): void
     {
         $badge = $node->style->badge;
         if (null === $badge) {
@@ -89,7 +90,7 @@ final readonly class BoxRenderer implements ElementRenderer
             return;
         }
 
-        $lastColumn = $column + $node->boxWidth() - 1;
+        $lastColumn = $column + $boxWidth - 1;
         $canvas->text($row, $lastColumn - $badge->width(), $badge->text, self::Z_INDEX, $color);
     }
 

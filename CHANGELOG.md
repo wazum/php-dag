@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Labels on the outer branches of a fan-out no longer push sibling boxes far apart; room is only made beside the lane where a label is drawn, and parents move with their children.
 - A long edge leaving a lifted fan-out now bends on the bar row instead of crossing the label row.
 - A fan-out label beside a long-edge sibling stays next to its own edge.
+- Parallel edges attach inside both boxes in both flow directions: a box grows until every parallel edge has its own port (single edges share one trunk port), ports follow the order of the far ends, and bending parallel lanes nest without crossing. Previously lanes could leave past a box border, replace a corner, or disappear in left-to-right flow.
 - When the outer labels of two neighbouring fan-outs would collide, the right fan-out moves over so both bars share one row and every label stays beside its own edge; a separate row is only used for bars that really interleave.
 - Boxes in one layer no longer overlap when a feedback edge skips that layer (`r -> b; r -> x; b -> z; z -> r`); the positioner now aligns nodes only with neighbours in the adjacent layer.
 - A feedback edge no longer runs through a neighbouring box: when a box blocks the usual side (east, or south in left-to-right flow), the edge takes the opposite side if that side is free.

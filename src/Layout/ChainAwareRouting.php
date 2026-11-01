@@ -23,9 +23,10 @@ final readonly class ChainAwareRouting implements EdgeRouting
         );
 
         $routedEdgeIds = [];
+        $ports = EdgePorts::of($graph, FlowDirection::TopToBottom);
 
         /** @var array<string, int> */
-        $preferredColumns = [];
+        $preferredColumns = $ports->trunkExitPositions;
 
         /** @var array<int, list<int>> */
         $laneColumns = [];
@@ -49,7 +50,7 @@ final readonly class ChainAwareRouting implements EdgeRouting
         /** @var array<string, list<LayoutEdge>> $directGroups */
         $directGroups = [];
         foreach ($graph->edges() as $edge) {
-            if (isset($routedEdgeIds[spl_object_id($edge)])) {
+            if ($edge->reversed || isset($routedEdgeIds[spl_object_id($edge)])) {
                 /** @infection-ignore-all break would stop after first non-chain edge; tests have chain edges followed by direct edges */
                 continue;
             }
@@ -58,46 +59,19 @@ final readonly class ChainAwareRouting implements EdgeRouting
         }
 
         foreach ($directGroups as $group) {
-            $parallelCount = count($group);
-            foreach ($group as $parallelIndex => $edge) {
+            foreach ($group as $edge) {
+                $edgeId = spl_object_id($edge);
                 $sourceNode = $graph->getLayoutNode($edge->sourceId());
                 $targetNode = $graph->getLayoutNode($edge->targetId());
                 /** @infection-ignore-all boxHeight() is always positive; coalesce fallback is defensive */
                 $exitRow = $sourceNode->row + ($layerMaxHeights[$sourceNode->layer] ?? $sourceNode->boxHeight());
                 $entryRow = $targetNode->row - 1;
+                $exitColumn = $ports->exitPositions[$edgeId] ?? $ports->trunkExitPositions[$sourceNode->id] ?? $sourceNode->column + intdiv($sourceNode->boxWidth(), 2);
+                $targetColumn = $ports->entryPositions[$edgeId] ?? $ports->trunkEntryPositions[$targetNode->id] ?? $this->alignedTargetColumn($exitColumn, $targetNode, $graph);
 
-                if (1 === $parallelCount) {
-                    $exitColumn = $sourceNode->column + intdiv($sourceNode->boxWidth(), 2);
-                    $targetColumn = $this->alignedTargetColumn($exitColumn, $targetNode, $graph);
-                } else {
-                    $exitColumn = $this->parallelLaneColumn($sourceNode, $targetNode, $parallelIndex, $parallelCount);
-                    $targetColumn = $exitColumn;
-                }
-
-                $this->routeDirectEdge($edge, $exitRow, $exitColumn, $entryRow, $targetColumn, $groupEntryCeilings[$targetNode->id] ?? null, $graph->divergingLift($sourceNode->id));
+                $this->routeDirectEdge($edge, $exitRow, $exitColumn, $entryRow, $targetColumn, $groupEntryCeilings[$targetNode->id] ?? null, $graph->divergingLift($sourceNode->id) + ($ports->bendDepths[$edgeId] ?? 0));
             }
         }
-    }
-
-    /**
-     * Places parallel edges on lane columns valid for *both* the source and the
-     * target box — the overlap of their inner port spans — spread evenly across
-     * that overlap. Because both endpoints share the column, each lane drops as a
-     * straight vertical line instead of bending when the two boxes differ in
-     * width (Graphviz likewise nests adjacent-rank multi-edges as straight,
-     * centre-symmetric lines).
-     */
-    private function parallelLaneColumn(LayoutNode $source, LayoutNode $target, int $index, int $count): int
-    {
-        $leftBound = max($source->column + 1, $target->column + 1);
-        $rightBound = min(
-            $source->column + $source->boxWidth() - 2,
-            $target->column + $target->boxWidth() - 2,
-        );
-        /** @infection-ignore-all the max(0, ...) floor only guards non-overlapping inner spans, which cannot occur for a parallel connection whose endpoints share a centre column; with overlap rightBound >= leftBound always holds */
-        $span = max(0, $rightBound - $leftBound);
-
-        return $leftBound + intdiv($index * $span, $count - 1);
     }
 
     /**

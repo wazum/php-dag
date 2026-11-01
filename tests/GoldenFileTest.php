@@ -74,6 +74,12 @@ final class GoldenFileTest extends TestCase
         yield 'west_self_loop_beside_neighbour' => ['west_self_loop_beside_neighbour', Graph::fromDot('digraph { r -> x; r -> b; b -> r; b -> b }'), $topToBottom];
         yield 'feedback_beside_a_neighbour' => ['feedback_beside_a_neighbour', Graph::fromDot('digraph { r -> b; r -> x; b -> r }'), $topToBottom];
         yield 'fan_outs_with_colliding_labels' => ['fan_outs_with_colliding_labels', Graph::fromDot('digraph { a -> c [label="x"]; a -> d [label="yes please"]; b -> e [label="no thanks"]; b -> f [label="v"] }'), $topToBottom];
+        yield 'parallel_pair_beside_single_edge' => ['parallel_pair_beside_single_edge', Graph::fromDot('digraph { a -> b; a -> b; a -> c }'), $topToBottom];
+        yield 'parallel_two_targets' => ['parallel_two_targets', Graph::fromDot('digraph { a -> b; a -> b; a -> c; a -> c }'), $topToBottom];
+        yield 'parallel_pair_converging_with_single_edge' => ['parallel_pair_converging_with_single_edge', Graph::fromDot('digraph { a -> c; b -> c; b -> c }'), $topToBottom];
+        yield 'parallel_triple_beside_pair' => ['parallel_triple_beside_pair', Graph::fromDot('digraph { a -> b; a -> b; a -> b; a -> c; a -> c }'), $topToBottom];
+        yield 'single_edge_beside_parallel_pair' => ['single_edge_beside_parallel_pair', Graph::fromDot('digraph { a -> b; a -> c; a -> c }'), $topToBottom];
+        yield 'parallel_pair_above_trunk_bar' => ['parallel_pair_above_trunk_bar', Graph::fromDot('digraph { a -> b; a -> b; a -> c; a -> d }'), $topToBottom];
         yield 'highlighted_path' => ['highlighted_path', self::highlightedPath(), $topToBottom];
         yield 'cycle' => ['cycle', self::cycle(), $topToBottom];
         yield 'disconnected_components' => ['disconnected_components', self::disconnectedComponents(), $topToBottom];
@@ -91,6 +97,9 @@ final class GoldenFileTest extends TestCase
         yield 'network_simplex' => ['network_simplex', self::floatingNode(), AsciiDag::builder()->quality(LayoutQuality::Quality)->build()];
         yield 'left_to_right_self_loop_beside_feedback' => ['left_to_right_self_loop_beside_feedback', Graph::fromDot('digraph { a -> b; b -> a; b -> b }'), $leftToRight];
         yield 'left_to_right_feedback_beside_a_neighbour' => ['left_to_right_feedback_beside_a_neighbour', Graph::fromDot('digraph { r -> b; r -> x; b -> r }'), $leftToRight];
+        yield 'left_to_right_parallel_pair_beside_single_edge' => ['left_to_right_parallel_pair_beside_single_edge', Graph::fromDot('digraph { a -> b; a -> b; a -> c }'), $leftToRight];
+        yield 'left_to_right_parallel_two_targets' => ['left_to_right_parallel_two_targets', Graph::fromDot('digraph { a -> b; a -> b; a -> c; a -> c }'), $leftToRight];
+        yield 'left_to_right_parallel_pair_converging_with_single_edge' => ['left_to_right_parallel_pair_converging_with_single_edge', Graph::fromDot('digraph { a -> c; b -> c; b -> c }'), $leftToRight];
         yield 'left_to_right_cluster' => ['left_to_right_cluster', self::clusteredPipeline(), $leftToRight];
         yield 'left_to_right_cluster_evicts' => ['left_to_right_cluster_evicts', self::clusterEvictsForeign(), $leftToRight];
     }

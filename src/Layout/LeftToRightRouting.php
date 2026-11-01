@@ -14,8 +14,10 @@ final readonly class LeftToRightRouting implements EdgeRouting
         $straightRowCandidates = $this->collectStraightRowCandidates($graph);
         $groupEntryColumns = $this->groupEntryColumnCeilings($graph);
 
+        $ports = EdgePorts::of($graph, FlowDirection::LeftToRight);
+
         /** @var array<string, int> */
-        $preferredRows = [];
+        $preferredRows = $ports->trunkExitPositions;
 
         /** @var array<int, list<int>> */
         $laneRows = [];
@@ -26,33 +28,18 @@ final readonly class LeftToRightRouting implements EdgeRouting
         /** @var array<string, int> */
         $sourceLanes = [];
 
-        $parallelGroupSizes = $this->parallelGroupSizes($graph);
-        /** @var array<string, int> */
-        $parallelSeen = [];
-
         foreach ($graph->edges() as $edge) {
+            $edgeId = spl_object_id($edge);
             $sourceNode = $graph->getLayoutNode($edge->sourceId());
             $targetNode = $graph->getLayoutNode($edge->targetId());
-            $exitRow = $preferredRows[$sourceNode->id] ?? $sourceNode->row + intdiv($sourceNode->boxHeight(), 2);
+            $exitRow = $ports->exitPositions[$edgeId] ?? $preferredRows[$sourceNode->id] ?? $sourceNode->row + intdiv($sourceNode->boxHeight(), 2);
             /** @infection-ignore-all coalesce fallback is defensive; layerMaxWidths covers every layer */
             $exitColumn = $sourceNode->column + ($layerMaxWidths[$sourceNode->layer] ?? $sourceNode->boxWidth());
             $entryColumn = $targetNode->column - 1;
 
             if (!$targetNode instanceof DummyLayoutNode) {
-                $parallelKey = $edge->sourceId()."\0".$edge->targetId();
-                /** @infection-ignore-all the ?? fallback is only reached for a reversed edge (whose key is absent), and the !reversed guard below sends it to the single-edge branch regardless of the count, so the fallback value is never observable */
-                $parallelCount = $parallelGroupSizes[$parallelKey] ?? 0;
-                if (!$edge->reversed && $parallelCount > 1) {
-                    // Each parallel edge gets its own port row on both grown boxes;
-                    // the shared row makes the lane a straight horizontal line.
-                    $parallelIndex = $parallelSeen[$parallelKey] ?? 0;
-                    $parallelSeen[$parallelKey] = $parallelIndex + 1;
-                    $portRow = $this->parallelPortRow($sourceNode, $targetNode, $parallelIndex, $parallelCount);
-                    $this->routeDirectEdge($edge, $exitColumn, $portRow, $entryColumn, $portRow);
-                    continue;
-                }
-
-                $this->routeDirectEdge($edge, $exitColumn, $exitRow, $entryColumn, $this->alignedTargetRow($exitRow, $targetNode, $graph), $groupEntryColumns[$targetNode->id] ?? null);
+                $targetRow = $ports->entryPositions[$edgeId] ?? $ports->trunkEntryPositions[$targetNode->id] ?? $this->alignedTargetRow($exitRow, $targetNode, $graph);
+                $this->routeDirectEdge($edge, $exitColumn, $exitRow, $entryColumn, $targetRow, $groupEntryColumns[$targetNode->id] ?? null, $ports->bendDepths[$edgeId] ?? 0);
                 continue;
             }
 
@@ -139,55 +126,6 @@ final readonly class LeftToRightRouting implements EdgeRouting
         return $candidates;
     }
 
-    /**
-     * Counts how many edges share each (source, target) pair so parallel groups
-     * can be fanned across port rows.
-     *
-     * @return array<string, int>
-     */
-    private function parallelGroupSizes(LayoutGraph $graph): array
-    {
-        $sizes = [];
-        foreach ($graph->edges() as $edge) {
-            // Reversed (feedback) edges are routed separately, so they must not
-            // inflate a forward pair's parallel count.
-            /** @infection-ignore-all CycleBreaker appends reversed replacements at the tail of the edge list, so every forward edge is counted before the first reversed one is reached; continue and break leave the forward parallel counts identical */
-            if ($edge->reversed) {
-                continue;
-            }
-            /** @infection-ignore-all the separator only keys the (source, target) group; node ids cannot contain it, so altering it leaves the grouping unchanged for any real id */
-            $sizes[$edge->sourceId()."\0".$edge->targetId()] = ($sizes[$edge->sourceId()."\0".$edge->targetId()] ?? 0) + 1;
-        }
-
-        return $sizes;
-    }
-
-    /**
-     * Places parallel edges on port rows valid for *both* the source and target
-     * box — the overlap of their inner spans — spread evenly across it. Both
-     * endpoints share the row, so each lane is a straight horizontal line. Mirror
-     * of the top-to-bottom column fanning in ChainAwareRouting.
-     *
-     * @infection-ignore-all both endpoints of a parallel group are grown to host
-     * the ports and centred on a shared row band, so their interior row spans
-     * coincide (and where one box is taller the shorter one tightens the overlap
-     * symmetrically); the per-side max/min terms are therefore masked by the
-     * equal other side, while the resulting port rows are pinned by the
-     * left-to-right parallel-edge integration snapshot in AsciiDagTest
-     */
-    private function parallelPortRow(LayoutNode $source, LayoutNode $target, int $index, int $count): int
-    {
-        $topBound = max($source->row + 1, $target->row + 1);
-        $bottomBound = min(
-            $source->row + $source->boxHeight() - 2,
-            $target->row + $target->boxHeight() - 2,
-        );
-        /** @infection-ignore-all the max(0, ...) floor only guards non-overlapping inner spans, which cannot occur once both endpoints are grown to host the ports and centred on a shared row band */
-        $span = max(0, $bottomBound - $topBound);
-
-        return $topBound + intdiv($index * $span, $count - 1);
-    }
-
     private function alignedTargetRow(int $exitRow, LayoutNode $targetNode, LayoutGraph $graph): int
     {
         /** @infection-ignore-all box-center rounding; a shifted center still lands inside the box and renders connected */
@@ -204,7 +142,7 @@ final readonly class LeftToRightRouting implements EdgeRouting
         return $targetRow;
     }
 
-    private function routeDirectEdge(LayoutEdge $edge, int $exitColumn, int $exitRow, int $entryColumn, int $targetRow, ?int $bendCeiling = null): void
+    private function routeDirectEdge(LayoutEdge $edge, int $exitColumn, int $exitRow, int $entryColumn, int $targetRow, ?int $bendCeiling = null, int $bendDepth = 0): void
     {
         if ($exitRow === $targetRow) {
             $edge->waypoints = [new Waypoint($exitRow, $exitColumn), new Waypoint($exitRow, $entryColumn)];
@@ -212,7 +150,7 @@ final readonly class LeftToRightRouting implements EdgeRouting
             return;
         }
 
-        $bendColumn = max($exitColumn, $entryColumn - 1);
+        $bendColumn = max($exitColumn, $entryColumn - 1 - $bendDepth);
         /** @infection-ignore-all <= is equivalent: when the ceiling equals the bend column the branch re-assigns max(exitColumn, bendColumn) === bendColumn, leaving it unchanged */
         if (null !== $bendCeiling && $bendCeiling < $bendColumn) {
             // Pull the bend left of a group's left border so the edge crosses

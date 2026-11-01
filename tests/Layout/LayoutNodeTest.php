@@ -55,4 +55,17 @@ final class LayoutNodeTest extends TestCase
 
         self::assertSame($node->boxHeight(), $layoutNode->boxHeight());
     }
+
+    #[Test]
+    public function boxWidthGrowsToTheMinimumButNeverShrinks(): void
+    {
+        $node = new Node('A', 'Alpha');
+        $layoutNode = new RealLayoutNode(id: 'A', node: $node);
+
+        $layoutNode->minBoxWidth = $node->boxWidth() + 4;
+        self::assertSame($node->boxWidth() + 4, $layoutNode->boxWidth());
+
+        $layoutNode->minBoxWidth = 1;
+        self::assertSame($node->boxWidth(), $layoutNode->boxWidth());
+    }
 }

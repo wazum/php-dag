@@ -8,6 +8,9 @@ use PhpDag\Graph\Node;
 
 final class RealLayoutNode extends LayoutNode
 {
+    /** Floor applied to {@see boxWidth()} so a box can be grown to host one port per edge (top-to-bottom parallel edges). */
+    public int $minBoxWidth = 0;
+
     // Measured once: Node is immutable, and its Unicode width/height are read
     // repeatedly across positioning and rendering.
     private readonly int $measuredWidth;
@@ -24,7 +27,7 @@ final class RealLayoutNode extends LayoutNode
 
     public function boxWidth(): int
     {
-        return $this->measuredWidth;
+        return max($this->measuredWidth, $this->minBoxWidth);
     }
 
     protected function naturalBoxHeight(): int

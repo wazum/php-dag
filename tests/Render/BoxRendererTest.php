@@ -9,6 +9,7 @@ use PhpDag\Graph\Graph;
 use PhpDag\Graph\Node;
 use PhpDag\Graph\NodeStyle;
 use PhpDag\Layout\LayoutGraph;
+use PhpDag\Layout\RealLayoutNode;
 use PhpDag\Render\BoxRenderer;
 use PhpDag\Render\Canvas;
 use PhpDag\Render\ElementRenderer;
@@ -40,6 +41,26 @@ final class BoxRendererTest extends TestCase
         ╭──────╮
         │ Test │
         ╰──────╯
+        TEXT;
+
+        self::assertSame($expected, (new PlainTextFormatter())->format($canvas));
+    }
+
+    #[Test]
+    public function rendersAGrownBoxWiderWithCentredContent(): void
+    {
+        $canvas = new Canvas();
+        $layoutGraph = $this->buildLayoutGraph(new Node('A', 'a'));
+        $layoutNode = $layoutGraph->getLayoutNode('A');
+        self::assertInstanceOf(RealLayoutNode::class, $layoutNode);
+        $layoutNode->minBoxWidth = 7;
+
+        (new BoxRenderer())->render($canvas, $layoutGraph);
+
+        $expected = <<<'TEXT'
+        ╭─────╮
+        │  a  │
+        ╰─────╯
         TEXT;
 
         self::assertSame($expected, (new PlainTextFormatter())->format($canvas));

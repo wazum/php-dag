@@ -23,10 +23,11 @@ use PhpDag\Layout\LayerAssigner;
 use PhpDag\Layout\LayoutEngine;
 use PhpDag\Layout\LayoutQuality;
 use PhpDag\Layout\LeftToRightLabelReserver;
-use PhpDag\Layout\LeftToRightParallelPortReserver;
 use PhpDag\Layout\LeftToRightPositioning;
 use PhpDag\Layout\LeftToRightRouting;
 use PhpDag\Layout\NodePositioner;
+use PhpDag\Layout\ParallelBendLaneReserver;
+use PhpDag\Layout\ParallelPortReserver;
 use PhpDag\Layout\Pipeline;
 use PhpDag\Layout\SelfLoopRouter;
 use PhpDag\Layout\VerticalCompactor;
@@ -188,6 +189,7 @@ final class AsciiDagBuilder
 
     private function addTopToBottomProcessors(Pipeline $pipeline): void
     {
+        $pipeline->add(new ParallelPortReserver(FlowDirection::TopToBottom));
         $pipeline->add(new NodePositioner(new BrandesKopfPositioning(
             horizontalSpacing: $this->nodeSpacing,
             /** @infection-ignore-all the +1 seeds extra gap that VerticalCompactor reclaims down to the required spacing, so +1 vs +2 produces identical output */
@@ -200,12 +202,13 @@ final class AsciiDagBuilder
         // replaces the rank gap rather than stacking on top of it.
         $pipeline->add(new VerticalCompactor($this->rankSpacing));
         $pipeline->add(new LabelReserver());
+        $pipeline->add(new ParallelBendLaneReserver(FlowDirection::TopToBottom));
         $pipeline->add(new EdgeRouter());
     }
 
     private function addLeftToRightProcessors(Pipeline $pipeline): void
     {
-        $pipeline->add(new LeftToRightParallelPortReserver());
+        $pipeline->add(new ParallelPortReserver(FlowDirection::LeftToRight));
         $pipeline->add(new NodePositioner(new LeftToRightPositioning(
             /** @infection-ignore-all the +1 seeds extra gap that HorizontalCompactor reclaims down to the required spacing, so +1 vs +2 produces identical output */
             horizontalSpacing: $this->rankSpacing + 1,
@@ -216,6 +219,7 @@ final class AsciiDagBuilder
         $pipeline->add(new GroupSpacer(FlowDirection::LeftToRight));
         $pipeline->add(new HorizontalCompactor($this->rankSpacing));
         $pipeline->add(new LeftToRightLabelReserver());
+        $pipeline->add(new ParallelBendLaneReserver(FlowDirection::LeftToRight));
         $pipeline->add(new EdgeRouter(new LeftToRightRouting()));
     }
 }
