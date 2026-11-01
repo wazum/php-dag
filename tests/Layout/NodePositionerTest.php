@@ -13,16 +13,24 @@ use PhpDag\Layout\LayoutGraph;
 use PhpDag\Layout\NodePositioner;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
-use ReflectionProperty;
 
 final class NodePositionerTest extends TestCase
 {
     #[Test]
     public function usesBrandesKopfPositioningAsDefault(): void
     {
-        $positioner = new NodePositioner();
-        $reflection = new ReflectionProperty($positioner, 'strategy');
-        self::assertInstanceOf(BrandesKopfPositioning::class, $reflection->getValue($positioner));
+        $byDefault = $this->layeredFanOut();
+        $explicit = $this->layeredFanOut();
+
+        (new NodePositioner())->process($byDefault);
+        (new NodePositioner(new BrandesKopfPositioning()))->process($explicit);
+
+        foreach (['A', 'B', 'C'] as $nodeId) {
+            self::assertSame(
+                [$explicit->getLayoutNode($nodeId)->row, $explicit->getLayoutNode($nodeId)->column],
+                [$byDefault->getLayoutNode($nodeId)->row, $byDefault->getLayoutNode($nodeId)->column],
+            );
+        }
     }
 
     #[Test]
@@ -39,5 +47,13 @@ final class NodePositionerTest extends TestCase
 
         self::assertSame(0, $layoutGraph->getLayoutNode('A')->row);
         self::assertGreaterThan(0, $layoutGraph->getLayoutNode('B')->row);
+    }
+
+    private function layeredFanOut(): LayoutGraph
+    {
+        $layoutGraph = LayoutGraph::fromGraph(Graph::fromDot('digraph { A -> B; A -> C }'));
+        (new LayerAssigner())->process($layoutGraph);
+
+        return $layoutGraph;
     }
 }
