@@ -69,6 +69,7 @@ final class GoldenFileTest extends TestCase
         yield 'fan_out_labels_with_long_edge' => ['fan_out_labels_with_long_edge', self::fanOutLabelsWithLongEdge(), $topToBottom];
         yield 'fan_out_label_beside_long_edge' => ['fan_out_label_beside_long_edge', self::fanOutLabelBesideLongEdge(), $topToBottom];
         yield 'fan_outs_side_by_side' => ['fan_outs_side_by_side', self::fanOutsSideBySide(), $topToBottom];
+        yield 'fan_outs_with_outer_labels' => ['fan_outs_with_outer_labels', self::fanOutsWithOuterLabels(), $topToBottom];
         yield 'highlighted_path' => ['highlighted_path', self::highlightedPath(), $topToBottom];
         yield 'cycle' => ['cycle', self::cycle(), $topToBottom];
         yield 'disconnected_components' => ['disconnected_components', self::disconnectedComponents(), $topToBottom];
@@ -472,6 +473,11 @@ final class GoldenFileTest extends TestCase
             ->addEdge(new Edge('b', 'f', label: new Label('v')));
 
         return $graph;
+    }
+
+    private static function fanOutsWithOuterLabels(): Graph
+    {
+        return Graph::fromDot('digraph { a -> c [label="x"]; a -> d; a -> g [label="inner"]; b -> e [label="u"]; b -> f; b -> h [label="v"] }');
     }
 
     private static function highlightedPath(): Graph

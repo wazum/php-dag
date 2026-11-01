@@ -16,13 +16,13 @@ final readonly class LabelReserver implements Processor
             return;
         }
 
+        $this->widenConvergingChannels($graph);
+        $this->reserveHorizontalSpace($graph);
         [$divergingLifts, $divergingRows] = $this->divergingLifts($graph);
         foreach ($divergingLifts as $sourceId => $lift) {
             $graph->reserveDivergingLift($sourceId, $lift);
         }
         $this->shiftLayers($graph, $this->calculateGapShifts($graph, $divergingRows));
-        $this->widenConvergingChannels($graph);
-        $this->reserveHorizontalSpace($graph);
         $this->ensureOuterLabelMargins($graph);
         $this->reserveCorridorSpans($graph);
     }
@@ -384,10 +384,11 @@ final readonly class LabelReserver implements Processor
             }
 
             $sourceNode = $graph->getLayoutNode($edge->sourceId);
-            $edgeColumn = $sourceNode->column + intdiv($sourceNode->boxWidth(), 2);
+            $targetNode = $graph->getLayoutNode($edge->targetId);
+            $laneNode = LabelPosition::Source === $edge->label->position ? $sourceNode : $targetNode;
+            $edgeColumn = $laneNode->column + intdiv($laneNode->boxWidth(), 2);
             $labelWidth = $edge->label->width();
 
-            $targetNode = $graph->getLayoutNode($edge->targetId);
             /** @infection-ignore-all labelLayer targets the inserted gap row; tested via vertical tests; horizontal only tests Middle path */
             $labelLayer = match ($edge->label->position) {
                 LabelPosition::Source => $sourceNode->layer + 1,
@@ -426,14 +427,7 @@ final readonly class LabelReserver implements Processor
                 continue;
             }
 
-            $shiftAmount = $rightEnd - $rightConflict->column + 2;
-            foreach ($graph->layerIndex()[$labelLayer] ?? [] as $nodeId) {
-                $node = $graph->getLayoutNode($nodeId);
-                /** @infection-ignore-all No test node sits exactly at edgeColumn; >= vs > is equivalent */
-                if ($node->column >= $edgeColumn) {
-                    $node->column += $shiftAmount;
-                }
-            }
+            $this->shiftColumnsAtOrRightOf($graph, $edgeColumn, $rightEnd - $rightConflict->column + 2);
         }
     }
 

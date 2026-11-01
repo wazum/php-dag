@@ -397,35 +397,18 @@ final class LabelReserverTest extends TestCase
         $graph->addEdge(new LayoutEdge(edge: $corridorEdge));
         $graph->storeOriginalEdge($corridorEdge);
 
-        $nodeA = new RealLayoutNode('A', new Node('A', 'A'));
-        $nodeA->layer = 0;
-        $nodeA->row = 0;
-        $nodeA->column = 10;
-        $graph->addNode($nodeA);
-
-        $nodeB = new RealLayoutNode('B', new Node('B', 'VeryWideBoxHere'));
-        $nodeB->layer = 1;
-        $nodeB->row = 5;
-        $nodeB->column = 0;
-        $graph->addNode($nodeB);
-
-        $nodeC = new RealLayoutNode('C', new Node('C', 'C'));
-        $nodeC->layer = 1;
-        $nodeC->row = 5;
-        $nodeC->column = 14;
-        $graph->addNode($nodeC);
-
-        $labeledEdge = new Edge('A', 'C', label: new Label('mytag'));
-        $graph->addEdge(new LayoutEdge(edge: new Edge('A', 'B')));
-        $graph->addEdge(new LayoutEdge(edge: $labeledEdge));
-        $graph->storeOriginalEdge(new Edge('A', 'B'));
-        $graph->storeOriginalEdge($labeledEdge);
+        $this->placedNode($graph, 'S', layer: 0, column: 30);
+        $this->placedNode($graph, 'L', layer: 1, column: 23, row: 6);
+        $this->placedNode($graph, 'M', layer: 1, column: 30, row: 6);
+        $right = $this->placedNode($graph, 'R', layer: 1, column: 37, row: 6);
+        $this->connectLabeled($graph, 'S', 'L', null);
+        $this->connectLabeled($graph, 'S', 'M', 'mytag');
+        $this->connectLabeled($graph, 'S', 'R', null);
         $graph->buildLayerIndex();
 
         (new LabelReserver())->process($graph);
 
-        self::assertSame(0, $nodeB->column, 'B is left of edge center — must not shift');
-        self::assertSame(35, $nodeC->column, 'C must still shift for the real conflict — the earlier corridor-backed edge must not abort the scan');
+        self::assertSame(41, $right->column, 'R must still make room for the inner label after the corridor-backed edge is skipped');
     }
 
     private function placedNode(LayoutGraph $graph, string $id, int $layer, int $column, int $row = 0): RealLayoutNode
@@ -447,75 +430,43 @@ final class LabelReserverTest extends TestCase
     }
 
     #[Test]
-    public function shiftsNodeColumnWhenLabelDoesNotFitOnEitherSide(): void
+    public function movesRightSiblingsAndTheirParentsToMakeRoomForAnInnerLabel(): void
     {
         $graph = new LayoutGraph();
-
-        $nodeA = new RealLayoutNode('A', new Node('A', 'A'));
-        $nodeA->layer = 0;
-        $nodeA->row = 0;
-        $nodeA->column = 10;
-        $graph->addNode($nodeA);
-
-        $nodeB = new RealLayoutNode('B', new Node('B', 'VeryWideBoxHere'));
-        $nodeB->layer = 1;
-        $nodeB->row = 5;
-        $nodeB->column = 0;
-        $graph->addNode($nodeB);
-
-        $nodeC = new RealLayoutNode('C', new Node('C', 'C'));
-        $nodeC->layer = 1;
-        $nodeC->row = 5;
-        $nodeC->column = 14;
-        $graph->addNode($nodeC);
-
-        $labeledEdge = new Edge('A', 'C', label: new Label('mytag'));
-        $graph->addEdge(new LayoutEdge(edge: new Edge('A', 'B')));
-        $graph->addEdge(new LayoutEdge(edge: $labeledEdge));
-        $graph->storeOriginalEdge(new Edge('A', 'B'));
-        $graph->storeOriginalEdge($labeledEdge);
+        $source = $this->placedNode($graph, 'S', layer: 0, column: 7);
+        $neighbour = $this->placedNode($graph, 'X', layer: 0, column: 20);
+        $left = $this->placedNode($graph, 'L', layer: 1, column: 0, row: 6);
+        $middle = $this->placedNode($graph, 'M', layer: 1, column: 7, row: 6);
+        $right = $this->placedNode($graph, 'R', layer: 1, column: 14, row: 6);
+        $this->connectLabeled($graph, 'S', 'L', null);
+        $this->connectLabeled($graph, 'S', 'M', 'mytag');
+        $this->connectLabeled($graph, 'S', 'R', null);
+        $this->connectLabeled($graph, 'X', 'R', null);
         $graph->buildLayerIndex();
 
         (new LabelReserver())->process($graph);
 
-        self::assertSame(0, $nodeB->column, 'B is left of edge center — must not shift');
-        self::assertSame(35, $nodeC->column, 'C must shift right: shiftAmount = rightEnd(19) - rightConflict.column(0) + 2 = 21, so 14 + 21 = 35');
+        self::assertSame([7, 0, 7], [$source->column, $left->column, $middle->column]);
+        self::assertSame(18, $right->column, 'mytag spans columns 11-15 beside the lane at 9, so R must start at 18');
+        self::assertSame(24, $neighbour->column, 'A parent right of the lane moves with its child');
     }
 
     #[Test]
-    public function shiftAmountAccountsForConflictNodeColumnOffset(): void
+    public function leavesOuterBranchLabelsWithoutExtraRoom(): void
     {
         $graph = new LayoutGraph();
-
-        $nodeA = new RealLayoutNode('A', new Node('A', 'A'));
-        $nodeA->layer = 0;
-        $nodeA->row = 0;
-        $nodeA->column = 10;
-        $graph->addNode($nodeA);
-
-        $nodeB = new RealLayoutNode('B', new Node('B', 'VeryWideBoxHere'));
-        $nodeB->layer = 1;
-        $nodeB->row = 5;
-        $nodeB->column = 5;
-        $graph->addNode($nodeB);
-
-        $nodeC = new RealLayoutNode('C', new Node('C', 'C'));
-        $nodeC->layer = 1;
-        $nodeC->row = 5;
-        $nodeC->column = 14;
-        $graph->addNode($nodeC);
-
-        $labeledEdge = new Edge('A', 'C', label: new Label('mytag'));
-        $graph->addEdge(new LayoutEdge(edge: new Edge('A', 'B')));
-        $graph->addEdge(new LayoutEdge(edge: $labeledEdge));
-        $graph->storeOriginalEdge(new Edge('A', 'B'));
-        $graph->storeOriginalEdge($labeledEdge);
+        $this->placedNode($graph, 'S', layer: 0, column: 7);
+        $this->placedNode($graph, 'L', layer: 1, column: 0, row: 6);
+        $middle = $this->placedNode($graph, 'M', layer: 1, column: 7, row: 6);
+        $right = $this->placedNode($graph, 'R', layer: 1, column: 14, row: 6);
+        $this->connectLabeled($graph, 'S', 'L', 'left-tag');
+        $this->connectLabeled($graph, 'S', 'M', null);
+        $this->connectLabeled($graph, 'S', 'R', 'right-tag');
         $graph->buildLayerIndex();
 
         (new LabelReserver())->process($graph);
 
-        self::assertSame(5, $nodeB->column, 'B is left of edge center — must not shift');
-        self::assertSame(30, $nodeC->column, 'shiftAmount = rightEnd(19) - conflict.column(5) + 2 = 16, so 14 + 16 = 30');
+        self::assertSame(7, $right->column - $middle->column);
     }
 
     #[Test]
