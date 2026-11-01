@@ -29,36 +29,31 @@ final class Canvas
         return $this->cells[$row][$column] ?? null;
     }
 
-    /** @infection-ignore-all Default zIndex is always overridden by callers */
-    public function putCharacter(int $row, int $column, string $character, int $zIndex = 0, ?AnsiColor $color = null): void
+    public function putCharacter(int $row, int $column, string $character, int $zIndex, ?AnsiColor $color = null): void
     {
         $this->get($row, $column)->putCharacter($character, $zIndex, $color);
     }
 
-    /** @infection-ignore-all Default zIndex is always overridden by callers */
-    public function markEdgePassthrough(int $row, int $column, int $bits, int $edgeId, EdgeStrokeStyle $strokeStyle, int $zIndex = 0, ?AnsiColor $color = null): void
+    public function markEdgePassthrough(int $row, int $column, int $bits, int $edgeId, EdgeStrokeStyle $strokeStyle, int $zIndex, ?AnsiColor $color = null): void
     {
         $this->get($row, $column)->markEdgePassthrough($bits, $edgeId, $strokeStyle, $zIndex, $color);
     }
 
-    /** @infection-ignore-all Default zIndex is always overridden by callers */
-    public function horizontalLine(int $row, int $startColumn, int $endColumn, int $edgeId, EdgeStrokeStyle $strokeStyle, int $zIndex = 0, ?AnsiColor $color = null): void
+    public function horizontalLine(int $row, int $startColumn, int $endColumn, int $edgeId, EdgeStrokeStyle $strokeStyle, int $zIndex, ?AnsiColor $color = null): void
     {
         for ($column = $startColumn; $column <= $endColumn; ++$column) {
             $this->markEdgePassthrough($row, $column, Direction::LEFT | Direction::RIGHT, $edgeId, $strokeStyle, $zIndex, $color);
         }
     }
 
-    /** @infection-ignore-all Default zIndex is always overridden by callers */
-    public function verticalLine(int $column, int $startRow, int $endRow, int $edgeId, EdgeStrokeStyle $strokeStyle, int $zIndex = 0, ?AnsiColor $color = null): void
+    public function verticalLine(int $column, int $startRow, int $endRow, int $edgeId, EdgeStrokeStyle $strokeStyle, int $zIndex, ?AnsiColor $color = null): void
     {
         for ($row = $startRow; $row <= $endRow; ++$row) {
             $this->markEdgePassthrough($row, $column, Direction::UP | Direction::DOWN, $edgeId, $strokeStyle, $zIndex, $color);
         }
     }
 
-    /** @infection-ignore-all Default zIndex is always overridden by callers */
-    public function box(int $row, int $column, int $width, int $height, BorderGlyphs $glyphs, int $zIndex = 0, ?AnsiColor $color = null): void
+    public function box(int $row, int $column, int $width, int $height, BorderGlyphs $glyphs, int $zIndex, ?AnsiColor $color = null): void
     {
         $lastColumn = $column + $width - 1;
         $lastRow = $row + $height - 1;
@@ -79,8 +74,7 @@ final class Canvas
         }
     }
 
-    /** @infection-ignore-all Default zIndex is always overridden by callers */
-    public function text(int $row, int $column, string $text, int $zIndex = 0, ?AnsiColor $color = null): void
+    public function text(int $row, int $column, string $text, int $zIndex, ?AnsiColor $color = null): void
     {
         $offset = 0;
         foreach (mb_str_split($text) as $character) {
