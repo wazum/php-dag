@@ -205,6 +205,28 @@ final class AsciiDagTest extends TestCase
     }
 
     #[Test]
+    public function rendersTwoParallelPairsFromOneSourceWithoutCrashing(): void
+    {
+        // Two parallel pairs give the median ordering four neighbour positions
+        // with both gaps zero, which used to divide by zero.
+        $graph = new Graph();
+        $graph->addNode(new Node('a', 'a'))
+            ->addNode(new Node('b', 'b'))
+            ->addNode(new Node('c', 'c'))
+            ->addEdge(new Edge('a', 'b'))
+            ->addEdge(new Edge('a', 'b'))
+            ->addEdge(new Edge('a', 'c'))
+            ->addEdge(new Edge('a', 'c'));
+
+        foreach ([LayoutQuality::Fast, LayoutQuality::Standard] as $quality) {
+            $result = AsciiDag::builder()->quality($quality)->build()->render($graph);
+
+            self::assertStringContainsString('│ b │', $result);
+            self::assertStringContainsString('│ c │', $result);
+        }
+    }
+
+    #[Test]
     public function rendersParallelEdgesAsStraightLanesBetweenDifferentWidthNodes(): void
     {
         $graph = new Graph();

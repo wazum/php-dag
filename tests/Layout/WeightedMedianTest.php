@@ -51,4 +51,20 @@ final class WeightedMedianTest extends TestCase
         // -> (4*6 + 8*2)/(2+6) = 5.0. Anchoring either gap at 0 would shift it.
         self::assertSame(5.0, (new WeightedMedian())->value([2, 4, 8, 14]));
     }
+
+    #[Test]
+    public function landsOnTheCollapsedSideWhenOnlyOneGapIsZero(): void
+    {
+        // Sorted [0,0,1,5]: left gap 0, right gap 4 -> the weight of the
+        // collapsed left pair is total, so the median is exactly 0.
+        self::assertSame(0.0, (new WeightedMedian())->value([5, 0, 1, 0]));
+    }
+
+    #[Test]
+    public function averagesTheMiddlePairWhenBothGapsAreZero(): void
+    {
+        // Parallel edges repeat a neighbour's position: sorted [0,0,1,1] has
+        // both gaps 0, so the weighted form would divide by zero.
+        self::assertSame(0.5, (new WeightedMedian())->value([1, 0, 1, 0]));
+    }
 }

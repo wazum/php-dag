@@ -17,12 +17,12 @@ final readonly class WeightedMedian
             return (float) $positions[$middle];
         }
 
-        if (2 === $count) {
-            return ($positions[0] + $positions[1]) / 2;
-        }
-
         $leftGap = $positions[$middle - 1] - $positions[0];
         $rightGap = $positions[$count - 1] - $positions[$middle];
+
+        if (0 === $leftGap && 0 === $rightGap) {
+            return ($positions[$middle - 1] + $positions[$middle]) / 2;
+        }
 
         return ($positions[$middle - 1] * $rightGap + $positions[$middle] * $leftGap) / ($leftGap + $rightGap);
     }
