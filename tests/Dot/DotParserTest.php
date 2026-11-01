@@ -88,6 +88,42 @@ final class DotParserTest extends TestCase
     }
 
     #[Test]
+    public function emptyNodeLabelFallsBackToTheId(): void
+    {
+        $graph = (new DotParser())->parse(<<<'DOT'
+            digraph {
+                a [label=""];
+                b [label=<>];
+                c [label="\nbody"];
+                1 [label=""];
+            }
+            DOT);
+
+        self::assertSame('1', $graph->getNode('1')->title);
+
+        self::assertSame('a', $graph->getNode('a')->title);
+        self::assertSame('b', $graph->getNode('b')->title);
+        self::assertSame('c', $graph->getNode('c')->title);
+        self::assertSame(['body'], $graph->getNode('c')->body);
+    }
+
+    #[Test]
+    public function emptyEdgeLabelMeansNoLabel(): void
+    {
+        $graph = (new DotParser())->parse('digraph { a -> b [label=""] }');
+
+        self::assertNull($graph->edges()[0]->label);
+    }
+
+    #[Test]
+    public function edgeLabelLineBreakBecomesASpace(): void
+    {
+        $graph = (new DotParser())->parse('digraph { a -> b [label="first\nsecond"] }');
+
+        self::assertSame('first second', $graph->edges()[0]->label?->text);
+    }
+
+    #[Test]
     public function edgeLabelAndStyleAttributesAreApplied(): void
     {
         $graph = (new DotParser())->parse(<<<'DOT'

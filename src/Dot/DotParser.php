@@ -315,12 +315,14 @@ final class DotParser
                 ControlCharacters::strip(...),
                 explode("\n", $attributes['label'] ?? (string) $id),
             );
-            $graph->addNode(new Node((string) $id, $labelLines[0], array_slice($labelLines, 1)));
+            $title = '' === $labelLines[0] ? (string) $id : $labelLines[0];
+            $graph->addNode(new Node((string) $id, $title, array_slice($labelLines, 1)));
         }
 
         $edgeDefinitions = $this->strict ? $this->coalescedStrictEdgeDefinitions() : $this->edgeDefinitions;
         foreach ($edgeDefinitions as $definition) {
-            $label = isset($definition['attributes']['label']) ? new Label(ControlCharacters::strip($definition['attributes']['label'])) : null;
+            $labelText = ControlCharacters::strip(str_replace("\n", ' ', $definition['attributes']['label'] ?? ''));
+            $label = '' === $labelText ? null : new Label($labelText);
             $graph->addEdge(new Edge(
                 $definition['source'],
                 $definition['target'],

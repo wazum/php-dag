@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A long edge leaving a lifted fan-out now bends on the bar row instead of crossing the label row.
 - A fan-out label beside a long-edge sibling stays next to its own edge.
 - A self-loop on a node that also has a feedback edge no longer merges with it: the loop moves to the free side of the box (west in top-to-bottom flow, top in left-to-right flow).
+- DOT input: an empty node label (`label=""`, `label=<>`) falls back to the node id instead of throwing, an empty edge label means no label, and `\n` in an edge label becomes a space instead of gluing the words together.
 - `Graph::isCyclic()` no longer throws a `TypeError` for numeric node ids such as `1 -> 2`.
 - A node with two or more parallel edge pairs (`a -> b; a -> b; a -> c; a -> c`) no longer crashes the layout with a division by zero.
 
