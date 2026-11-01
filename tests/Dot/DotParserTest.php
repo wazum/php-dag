@@ -564,6 +564,45 @@ final class DotParserTest extends TestCase
     }
 
     #[Test]
+    public function keepsTheFlowDirectionWhenASubgraphSetsItsOwnRankdir(): void
+    {
+        $parser = new DotParser();
+        $parser->parse('digraph { rankdir=LR; subgraph inner { rankdir=TB; graph [rankdir=BT]; a } }');
+
+        self::assertSame(FlowDirection::LeftToRight, $parser->flowDirection());
+    }
+
+    #[Test]
+    public function joinsAQuotedStringContinuedWithABackslashAtLineEnd(): void
+    {
+        $graph = (new DotParser())->parse("digraph { a [label=\"long \\\nname\"]; b [label=\"windows \\\r\nfile\"] }");
+
+        self::assertSame('long name', $graph->getNode('a')->title);
+        self::assertSame('windows file', $graph->getNode('b')->title);
+    }
+
+    #[Test]
+    public function rejectsNestedClustersAtTheInnerClusterBody(): void
+    {
+        try {
+            (new DotParser())->parse('digraph { subgraph cluster_outer { a; subgraph cluster_inner { b } } }');
+            self::fail('A nested cluster must be rejected');
+        } catch (DotSyntaxException $exception) {
+            self::assertStringContainsString('Nested clusters are not supported', $exception->getMessage());
+            self::assertSame([1, 62], [$exception->sourceLine, $exception->sourceColumn]);
+        }
+    }
+
+    #[Test]
+    public function rejectsASymbolAsTheGraphName(): void
+    {
+        $this->expectException(DotSyntaxException::class);
+        $this->expectExceptionMessage('Expected identifier, got "->"');
+
+        (new DotParser())->parse('digraph -> { a }');
+    }
+
+    #[Test]
     public function rejectsUnexpectedCharacter(): void
     {
         $this->expectException(InvalidArgumentException::class);

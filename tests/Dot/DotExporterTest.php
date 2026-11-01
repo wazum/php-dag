@@ -163,6 +163,23 @@ final class DotExporterTest extends TestCase
     }
 
     #[Test]
+    public function roundTripKeepsEveryEdgeStrokeStyle(): void
+    {
+        $graph = new Graph();
+        $graph->addNode(new Node('a', 'A'))->addNode(new Node('b', 'B'));
+        foreach (EdgeStrokeStyle::cases() as $strokeStyle) {
+            $graph->addEdge(new Edge('a', 'b', edgeStrokeStyle: $strokeStyle));
+        }
+
+        $reparsed = (new DotParser())->parse((new DotExporter())->export($graph));
+
+        self::assertSame(
+            EdgeStrokeStyle::cases(),
+            array_map(static fn (Edge $edge): EdgeStrokeStyle => $edge->edgeStrokeStyle, $reparsed->edges()),
+        );
+    }
+
+    #[Test]
     public function roundTripKeepsGroupsWhoseIdsWouldCollideUnderClusterPrefixing(): void
     {
         // 'foo' and 'cluster_foo' both collapse to the cluster name "cluster_foo"
@@ -195,6 +212,6 @@ final class DotExporterTest extends TestCase
 
         self::assertStringContainsString('"a" -> "b" [style=dotted];', $dot);
         self::assertStringContainsString('"b" -> "c" [style=bold];', $dot);
-        self::assertStringContainsString('"c" -> "d" [style=bold];', $dot);
+        self::assertStringContainsString('"c" -> "d" [style=bold, phpdag_stroke=double];', $dot);
     }
 }

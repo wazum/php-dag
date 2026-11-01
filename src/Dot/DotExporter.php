@@ -18,6 +18,9 @@ final readonly class DotExporter
      */
     public const GROUP_ID_ATTRIBUTE = 'phpdag_id';
 
+    /** Graphviz has no double stroke: it draws such edges bold, and this attribute brings the double stroke back on import. */
+    public const STROKE_ATTRIBUTE = 'phpdag_stroke';
+
     public function export(Graph $graph): string
     {
         $lines = ['digraph {'];
@@ -55,6 +58,9 @@ final readonly class DotExporter
             $dotStyle = $this->dotStyleFor($edge->edgeStrokeStyle);
             if (null !== $dotStyle) {
                 $attributes[] = sprintf('style=%s', $dotStyle);
+            }
+            if (EdgeStrokeStyle::Double === $edge->edgeStrokeStyle) {
+                $attributes[] = sprintf('%s=double', self::STROKE_ATTRIBUTE);
             }
 
             $lines[] = sprintf(

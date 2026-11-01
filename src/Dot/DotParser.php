@@ -89,7 +89,7 @@ final class DotParser
             throw $this->syntaxError(sprintf('Only directed graphs (digraph) are supported, got "%s"', ControlCharacters::escape($keyword)), 0);
         }
         if (!$this->peekIsSymbol('{')) {
-            $this->advance();
+            $this->advanceIdentifier();
         }
         $this->expectSymbol('{');
 
@@ -199,8 +199,12 @@ final class DotParser
 
         $savedNodeDefaults = $this->nodeDefaults;
         $savedEdgeDefaults = $this->edgeDefaults;
+        $savedGraphAttributes = $this->graphAttributes;
 
         $isCluster = null !== $name && str_starts_with($name, 'cluster');
+        if ($isCluster && [] !== $this->clusterStack) {
+            throw $this->syntaxError('Nested clusters are not supported', $this->tokens[$this->position - 1]['offset']);
+        }
         if ($isCluster) {
             $this->openCluster($name);
         }
@@ -217,6 +221,7 @@ final class DotParser
 
         $this->nodeDefaults = $savedNodeDefaults;
         $this->edgeDefaults = $savedEdgeDefaults;
+        $this->graphAttributes = $savedGraphAttributes;
     }
 
     /**
@@ -328,7 +333,9 @@ final class DotParser
             $graph->addEdge(new Edge(
                 $definition['source'],
                 $definition['target'],
-                edgeStrokeStyle: $this->edgeStrokeStyleFor($definition['attributes']['style'] ?? null),
+                edgeStrokeStyle: 'double' === ($definition['attributes'][DotExporter::STROKE_ATTRIBUTE] ?? null)
+                    ? EdgeStrokeStyle::Double
+                    : $this->edgeStrokeStyleFor($definition['attributes']['style'] ?? null),
                 label: $label,
             ));
         }
@@ -487,6 +494,10 @@ final class DotParser
                     if ('\\' === $dot[$offset] && '"' === ($dot[$offset + 1] ?? '')) {
                         $value .= '"';
                         $offset += 2;
+                        continue;
+                    }
+                    if ('\\' === $dot[$offset] && 1 === preg_match('/\G\r?\n/', $dot, $lineBreak, 0, $offset + 1)) {
+                        $offset += 1 + strlen($lineBreak[0]);
                         continue;
                     }
                     if ('\\' === $dot[$offset] && in_array($dot[$offset + 1] ?? '', ['n', 'l', 'r'], true)) {

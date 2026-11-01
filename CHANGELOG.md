@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- DOT input: a symbol in the graph-name slot (`digraph -> { }`) is a syntax error; `rankdir` or other graph attributes set inside a subgraph no longer change the whole graph; a backslash at the end of a line continues a quoted string; nested clusters fail with "Nested clusters are not supported" instead of being flattened into siblings.
+- `toDot()` keeps double edge strokes: they still export as `style=bold` for Graphviz, plus `phpdag_stroke=double`, which `fromDot()` reads back.
 - A badge wider than a box's content (for example two wide characters) widens the box instead of overwriting its top-left corner.
 - An edge label no longer starts on the right half of a wide character such as `漢`, which split the character.
 - With ASCII glyphs, a group border no longer cuts the edges that pass through it; the crossing is drawn as `+`.
