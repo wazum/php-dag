@@ -17,24 +17,10 @@ use RuntimeException;
  */
 final readonly class LayoutResult
 {
-    private int $width;
-    private int $height;
-
     public function __construct(
         private Canvas $canvas,
         private OutputFormatter $formatter,
     ) {
-        // Dimensions are the visible size of the drawing, so they are measured
-        // from the plain geometry — never from the render formatter, whose ANSI
-        // escape codes would inflate the width.
-        $width = 0;
-        $height = 0;
-        foreach ((new PlainTextFormatter())->rows($canvas) as $line) {
-            ++$height;
-            $width = max($width, mb_strwidth($line));
-        }
-        $this->width = $width;
-        $this->height = $height;
     }
 
     public function render(): string
@@ -68,13 +54,31 @@ final readonly class LayoutResult
     /** Visible width of the diagram in terminal columns. */
     public function width(): int
     {
-        return $this->width;
+        return $this->dimensions()[0];
     }
 
     /** Visible height of the diagram in rows. */
     public function height(): int
     {
-        return $this->height;
+        return $this->dimensions()[1];
+    }
+
+    /**
+     * Measured from the plain geometry, never from the render formatter, whose
+     * ANSI escape codes would inflate the width.
+     *
+     * @return array{int, int}
+     */
+    private function dimensions(): array
+    {
+        $width = 0;
+        $height = 0;
+        foreach ((new PlainTextFormatter())->rows($this->canvas) as $line) {
+            ++$height;
+            $width = max($width, mb_strwidth($line));
+        }
+
+        return [$width, $height];
     }
 
     /** @param resource $stream */
