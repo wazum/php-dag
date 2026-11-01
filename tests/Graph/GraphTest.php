@@ -629,6 +629,13 @@ final class GraphTest extends TestCase
     }
 
     #[Test]
+    public function isCyclicAcceptsNumericNodeIds(): void
+    {
+        self::assertFalse(Graph::fromDot('digraph { 1 -> 2 }')->isCyclic());
+        self::assertTrue(Graph::fromDot('digraph { 1 -> 2; 2 -> 1 }')->isCyclic());
+    }
+
+    #[Test]
     public function isCyclicReturnsFalseForSingleEdgeGraph(): void
     {
         $graph = new Graph();

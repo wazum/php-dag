@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Labels on the outer branches of a fan-out no longer push sibling boxes far apart; room is only made beside the lane where a label is drawn, and parents move with their children.
 - A long edge leaving a lifted fan-out now bends on the bar row instead of crossing the label row.
 - A fan-out label beside a long-edge sibling stays next to its own edge.
+- `Graph::isCyclic()` no longer throws a `TypeError` for numeric node ids such as `1 -> 2`.
 - A node with two or more parallel edge pairs (`a -> b; a -> b; a -> c; a -> c`) no longer crashes the layout with a division by zero.
 
 ## [1.1.0] - 2026-07-25

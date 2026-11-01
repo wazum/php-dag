@@ -195,8 +195,7 @@ final class Graph
 
         $incomingDegreeByNodeId = [];
         $queuedNodeIds = [];
-        foreach (array_keys($this->nodes) as $nodeKey) {
-            $nodeId = strval($nodeKey);
+        foreach ($this->nodeIds() as $nodeId) {
             $incomingDegreeByNodeId[$nodeId] = count($this->predecessorMap[$nodeId] ?? []);
             if (0 === $incomingDegreeByNodeId[$nodeId]) {
                 $queuedNodeIds[] = $nodeId;
@@ -228,9 +227,9 @@ final class Graph
     {
         $selfLooped = $this->selfLoopedNodeIds();
         $roots = [];
-        foreach (array_keys($this->nodes) as $nodeId) {
+        foreach ($this->nodeIds() as $nodeId) {
             if (!isset($this->predecessorMap[$nodeId]) && !isset($selfLooped[$nodeId])) {
-                $roots[] = strval($nodeId);
+                $roots[] = $nodeId;
             }
         }
 
@@ -242,9 +241,9 @@ final class Graph
     {
         $selfLooped = $this->selfLoopedNodeIds();
         $leaves = [];
-        foreach (array_keys($this->nodes) as $nodeId) {
+        foreach ($this->nodeIds() as $nodeId) {
             if (!isset($this->successorMap[$nodeId]) && !isset($selfLooped[$nodeId])) {
-                $leaves[] = strval($nodeId);
+                $leaves[] = $nodeId;
             }
         }
 
@@ -338,7 +337,7 @@ final class Graph
         }
 
         $states = [];
-        foreach (array_keys($this->nodes) as $nodeId) {
+        foreach ($this->nodeIds() as $nodeId) {
             if (!isset($states[$nodeId]) && $this->hasBackEdge($nodeId, $states)) {
                 return true;
             }
@@ -418,6 +417,14 @@ final class Graph
         }
 
         return $nodeIdSet;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function nodeIds(): array
+    {
+        return array_map(strval(...), array_keys($this->nodes));
     }
 
     /** @param array<string, 'visiting'|'done'> $states */
