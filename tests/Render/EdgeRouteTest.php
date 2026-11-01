@@ -24,8 +24,6 @@ final class EdgeRouteTest extends TestCase
         self::assertCount(2, $route->waypoints);
         self::assertSame(1, $route->edgeId);
         self::assertSame(EdgeStrokeStyle::Solid, $route->strokeStyle);
-        self::assertFalse($route->sourceArrow);
-        self::assertTrue($route->targetArrow);
     }
 
     #[Test]

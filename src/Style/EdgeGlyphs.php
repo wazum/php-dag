@@ -16,13 +16,7 @@ final readonly class EdgeGlyphs
     public function __construct(
         private array $junctionMap,
         private array $arrowMap,
-        private string $crossingCharacter = ')',
     ) {
-    }
-
-    public function crossingCharacter(): string
-    {
-        return $this->crossingCharacter;
     }
 
     public function junctionFor(int $mask): string
@@ -41,15 +35,5 @@ final readonly class EdgeGlyphs
         };
 
         return $this->arrowMap[$index];
-    }
-
-    public function vertical(): string
-    {
-        return $this->junctionFor(Direction::UP | Direction::DOWN);
-    }
-
-    public function horizontal(): string
-    {
-        return $this->junctionFor(Direction::LEFT | Direction::RIGHT);
     }
 }

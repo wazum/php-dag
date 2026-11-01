@@ -9,10 +9,12 @@ use PhpDag\Graph\Graph;
 use PhpDag\Graph\Node;
 use PhpDag\Layout\BrandesKopfPositioning;
 use PhpDag\Layout\ChainAwareRouting;
+use PhpDag\Layout\DummyLayoutNode;
 use PhpDag\Layout\DummyNodeInserter;
 use PhpDag\Layout\DummyNodeRemover;
 use PhpDag\Layout\EdgePort;
 use PhpDag\Layout\FlowDirection;
+use PhpDag\Layout\LayoutEdge;
 use PhpDag\Layout\LayoutGraph;
 use PhpDag\Layout\LeftToRightPositioning;
 use PhpDag\Layout\LeftToRightRouting;
@@ -20,7 +22,6 @@ use PhpDag\Layout\LongestPathLayering;
 use PhpDag\Render\BoxRenderer;
 use PhpDag\Render\Canvas;
 use PhpDag\Render\EdgeRenderer;
-use PhpDag\Render\EdgeRoute;
 use PhpDag\Render\ElementRenderer;
 use PhpDag\Render\PlainTextFormatter;
 use PhpDag\Render\Waypoint;
@@ -28,59 +29,53 @@ use PhpDag\Style\AnsiColor;
 use PhpDag\Style\EdgeStrokeStyle;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
-use ReflectionMethod;
 
 final class EdgeRendererTest extends TestCase
 {
     #[Test]
-    public function renderRoutesDrawsColoredRouteBodies(): void
+    public function drawsAColouredEdge(): void
     {
-        $canvas = new Canvas();
-        $route = new EdgeRoute(
-            waypoints: [new Waypoint(0, 0), new Waypoint(4, 0)],
-            edgeId: 1,
-            targetArrow: false,
-            color: AnsiColor::Red,
-        );
+        $canvas = $this->draw([$this->edge('a', [new Waypoint(0, 0), new Waypoint(4, 0)], color: AnsiColor::Red)]);
 
-        $method = new ReflectionMethod(EdgeRenderer::class, 'renderRoutes');
-        $method->invoke(new EdgeRenderer(), $canvas, [$route]);
-
-        self::assertSame(implode("\n", array_fill(0, 5, '│')), (new PlainTextFormatter())->format($canvas));
+        self::assertSame("│\n│\n│\n│\n▼", (new PlainTextFormatter())->format($canvas));
     }
 
     #[Test]
-    public function renderRoutesDrawsEveryColoredRouteNotJustTheFirst(): void
+    public function drawsEveryColouredEdgeNotJustTheFirst(): void
     {
-        $canvas = new Canvas();
-        $left = new EdgeRoute(waypoints: [new Waypoint(0, 0), new Waypoint(4, 0)], edgeId: 1, targetArrow: false, color: AnsiColor::Red);
-        $right = new EdgeRoute(waypoints: [new Waypoint(0, 4), new Waypoint(4, 4)], edgeId: 2, targetArrow: false, color: AnsiColor::Green);
+        $canvas = $this->draw([
+            $this->edge('a', [new Waypoint(0, 0), new Waypoint(4, 0)], color: AnsiColor::Red),
+            $this->edge('b', [new Waypoint(0, 4), new Waypoint(4, 4)], color: AnsiColor::Green),
+        ]);
 
-        $method = new ReflectionMethod(EdgeRenderer::class, 'renderRoutes');
-        $method->invoke(new EdgeRenderer(), $canvas, [$left, $right]);
-
-        self::assertSame(implode("\n", array_fill(0, 5, '│   │')), (new PlainTextFormatter())->format($canvas));
+        self::assertSame("│   │\n│   │\n│   │\n│   │\n▼   ▼", (new PlainTextFormatter())->format($canvas));
     }
 
     #[Test]
-    public function mergeIntervalsSortsThenCoalescesTouchingIntervals(): void
+    public function drawsTheCornersOfAColouredZShapedEdge(): void
     {
-        $method = new ReflectionMethod(EdgeRenderer::class, 'mergeIntervals');
+        $canvas = $this->draw([$this->edge('a', [new Waypoint(0, 0), new Waypoint(2, 0), new Waypoint(2, 4), new Waypoint(4, 4)], color: AnsiColor::Red)]);
 
-        $merged = $method->invoke(new EdgeRenderer(), [[10, 11], [1, 3], [7, 8], [4, 5]]);
-
-        self::assertSame([[1, 5], [7, 8], [10, 11]], $merged);
+        self::assertSame("│\n│\n└───┐\n    │\n    ▼", (new PlainTextFormatter())->format($canvas));
     }
 
     #[Test]
-    public function mergeIntervalsOrdersByStartSoAnEnclosingIntervalIsNotTruncated(): void
+    public function drawsTheOneCellRunsOfAShortColouredEdge(): void
     {
-        $method = new ReflectionMethod(EdgeRenderer::class, 'mergeIntervals');
+        $canvas = $this->draw([$this->edge('a', [new Waypoint(0, 0), new Waypoint(0, 2), new Waypoint(2, 2)], color: AnsiColor::Red)]);
 
-        // The wide interval must sort first so the merge keeps its low start. Comparing the
-        // wrong endpoints would reorder these and shrink the result to [[2, 10]] / [[5, 10]].
-        self::assertSame([[1, 10]], $method->invoke(new EdgeRenderer(), [[1, 10], [2, 3]]));
-        self::assertSame([[1, 10]], $method->invoke(new EdgeRenderer(), [[5, 6], [1, 10]]));
+        self::assertSame("──┐\n  │\n  ▼", (new PlainTextFormatter())->format($canvas));
+    }
+
+    #[Test]
+    public function keepsTheWholeLongerEdgeWhereTwoEdgesShareAColumn(): void
+    {
+        $long = [new Waypoint(0, 0), new Waypoint(6, 0)];
+        $short = [new Waypoint(2, 0), new Waypoint(3, 0)];
+        $expected = "│\n│\n│\n▼\n│\n│\n▼";
+
+        self::assertSame($expected, (new PlainTextFormatter())->format($this->draw([$this->edge('a', $long), $this->edge('b', $short)])));
+        self::assertSame($expected, (new PlainTextFormatter())->format($this->draw([$this->edge('b', $short), $this->edge('a', $long)])));
     }
 
     #[Test]
@@ -90,40 +85,9 @@ final class EdgeRendererTest extends TestCase
     }
 
     #[Test]
-    public function rendersStraightVerticalEdge(): void
-    {
-        $canvas = new Canvas();
-        $route = new EdgeRoute(
-            waypoints: [new Waypoint(0, 2), new Waypoint(4, 2)],
-            edgeId: 1,
-            targetArrow: false,
-        );
-        $renderer = new EdgeRenderer();
-
-        $renderer->renderRoute($canvas, $route);
-
-        $expected = <<<'EXPECTED'
-          │
-          │
-          │
-          │
-          │
-        EXPECTED;
-
-        self::assertSame($expected, (new PlainTextFormatter())->format($canvas));
-    }
-
-    #[Test]
     public function rendersAsciiArrowWhenUnicodeGlyphsDisabled(): void
     {
-        $canvas = new Canvas(unicodeGlyphs: false);
-        $route = new EdgeRoute(
-            waypoints: [new Waypoint(0, 0), new Waypoint(2, 0)],
-            edgeId: 1,
-        );
-        $renderer = new EdgeRenderer(unicodeGlyphs: false);
-
-        $renderer->renderRoute($canvas, $route);
+        $canvas = $this->draw([$this->edge('a', [new Waypoint(0, 0), new Waypoint(2, 0)])], unicodeGlyphs: false);
 
         $expected = <<<'EXPECTED'
         |
@@ -137,14 +101,7 @@ final class EdgeRendererTest extends TestCase
     #[Test]
     public function rendersVerticalEdgeWithDownwardArrow(): void
     {
-        $canvas = new Canvas();
-        $route = new EdgeRoute(
-            waypoints: [new Waypoint(0, 2), new Waypoint(4, 2)],
-            edgeId: 1,
-        );
-        $renderer = new EdgeRenderer();
-
-        $renderer->renderRoute($canvas, $route);
+        $canvas = $this->draw([$this->edge('a', [new Waypoint(0, 2), new Waypoint(4, 2)])]);
 
         $expected = <<<'EXPECTED'
           │
@@ -158,18 +115,9 @@ final class EdgeRendererTest extends TestCase
     }
 
     #[Test]
-    public function rendersVerticalEdgeWithSourceArrow(): void
+    public function reversedEdgeGetsItsArrowAtTheStart(): void
     {
-        $canvas = new Canvas();
-        $route = new EdgeRoute(
-            waypoints: [new Waypoint(0, 2), new Waypoint(4, 2)],
-            edgeId: 1,
-            sourceArrow: true,
-            targetArrow: false,
-        );
-        $renderer = new EdgeRenderer();
-
-        $renderer->renderRoute($canvas, $route);
+        $canvas = $this->draw([$this->edge('a', [new Waypoint(0, 2), new Waypoint(4, 2)], reversed: true)]);
 
         $expected = <<<'EXPECTED'
           ▲
@@ -185,30 +133,15 @@ final class EdgeRendererTest extends TestCase
     #[Test]
     public function rendersStraightHorizontalEdge(): void
     {
-        $canvas = new Canvas();
-        $route = new EdgeRoute(
-            waypoints: [new Waypoint(0, 0), new Waypoint(0, 4)],
-            edgeId: 1,
-            targetArrow: false,
-        );
-        $renderer = new EdgeRenderer();
+        $canvas = $this->draw([$this->edge('a', [new Waypoint(0, 0), new Waypoint(0, 4)])]);
 
-        $renderer->renderRoute($canvas, $route);
-
-        self::assertSame('─────', (new PlainTextFormatter())->format($canvas));
+        self::assertSame('────▶', (new PlainTextFormatter())->format($canvas));
     }
 
     #[Test]
     public function rendersLShapedEdgeWithCorner(): void
     {
-        $canvas = new Canvas();
-        $route = new EdgeRoute(
-            waypoints: [new Waypoint(0, 0), new Waypoint(0, 4), new Waypoint(3, 4)],
-            edgeId: 1,
-        );
-        $renderer = new EdgeRenderer();
-
-        $renderer->renderRoute($canvas, $route);
+        $canvas = $this->draw([$this->edge('a', [new Waypoint(0, 0), new Waypoint(0, 4), new Waypoint(3, 4)])]);
 
         $expected = <<<'EXPECTED'
         ────┐
@@ -223,19 +156,7 @@ final class EdgeRendererTest extends TestCase
     #[Test]
     public function rendersZShapedEdge(): void
     {
-        $canvas = new Canvas();
-        $route = new EdgeRoute(
-            waypoints: [
-                new Waypoint(0, 0),
-                new Waypoint(2, 0),
-                new Waypoint(2, 4),
-                new Waypoint(4, 4),
-            ],
-            edgeId: 1,
-        );
-        $renderer = new EdgeRenderer();
-
-        $renderer->renderRoute($canvas, $route);
+        $canvas = $this->draw([$this->edge('a', [new Waypoint(0, 0), new Waypoint(2, 0), new Waypoint(2, 4), new Waypoint(4, 4)])]);
 
         $expected = <<<'EXPECTED'
         │
@@ -251,160 +172,52 @@ final class EdgeRendererTest extends TestCase
     #[Test]
     public function rendersUpwardEdge(): void
     {
-        $canvas = new Canvas();
-        $route = new EdgeRoute(
-            waypoints: [new Waypoint(3, 0), new Waypoint(0, 0)],
-            edgeId: 1,
-            targetArrow: false,
-        );
-        $renderer = new EdgeRenderer();
+        $canvas = $this->draw([$this->edge('a', [new Waypoint(3, 0), new Waypoint(0, 0)])]);
 
-        $renderer->renderRoute($canvas, $route);
-
-        $expected = <<<'EXPECTED'
-        │
-        │
-        │
-        │
-        EXPECTED;
-
-        self::assertSame($expected, (new PlainTextFormatter())->format($canvas));
+        self::assertSame("▲\n│\n│\n│", (new PlainTextFormatter())->format($canvas));
     }
 
     #[Test]
     public function rendersLeftwardEdge(): void
     {
-        $canvas = new Canvas();
-        $route = new EdgeRoute(
-            waypoints: [new Waypoint(0, 3), new Waypoint(0, 0)],
-            edgeId: 1,
-            targetArrow: false,
-        );
-        $renderer = new EdgeRenderer();
+        $canvas = $this->draw([$this->edge('a', [new Waypoint(0, 3), new Waypoint(0, 0)])]);
 
-        $renderer->renderRoute($canvas, $route);
-
-        self::assertSame('────', (new PlainTextFormatter())->format($canvas));
+        self::assertSame('◀───', (new PlainTextFormatter())->format($canvas));
     }
 
     #[Test]
     public function rendersShortHorizontalSegment(): void
     {
-        $canvas = new Canvas();
-        $route = new EdgeRoute(
-            waypoints: [new Waypoint(0, 0), new Waypoint(0, 2)],
-            edgeId: 1,
-            targetArrow: false,
-        );
-        $renderer = new EdgeRenderer();
+        $canvas = $this->draw([$this->edge('a', [new Waypoint(0, 0), new Waypoint(0, 2)])]);
 
-        $renderer->renderRoute($canvas, $route);
-
-        self::assertSame('───', (new PlainTextFormatter())->format($canvas));
+        self::assertSame('──▶', (new PlainTextFormatter())->format($canvas));
     }
 
     #[Test]
     public function rendersDashedEdge(): void
     {
-        $canvas = new Canvas();
-        $route = new EdgeRoute(
-            waypoints: [new Waypoint(0, 0), new Waypoint(3, 0)],
-            edgeId: 1,
-            strokeStyle: EdgeStrokeStyle::Dashed,
-            targetArrow: false,
-        );
-        $renderer = new EdgeRenderer();
+        $canvas = $this->draw([$this->edge('a', [new Waypoint(0, 0), new Waypoint(3, 0)], EdgeStrokeStyle::Dashed)]);
 
-        $renderer->renderRoute($canvas, $route);
-
-        $expected = <<<'EXPECTED'
-        ╎
-        ╎
-        ╎
-        ╎
-        EXPECTED;
-
-        self::assertSame($expected, (new PlainTextFormatter())->format($canvas));
+        self::assertSame("╎\n╎\n╎\n▼", (new PlainTextFormatter())->format($canvas));
     }
 
     #[Test]
     public function rendersHeavyEdge(): void
     {
-        $canvas = new Canvas();
-        $route = new EdgeRoute(
-            waypoints: [new Waypoint(0, 0), new Waypoint(0, 3)],
-            edgeId: 1,
-            strokeStyle: EdgeStrokeStyle::Heavy,
-            targetArrow: false,
-        );
-        $renderer = new EdgeRenderer();
+        $canvas = $this->draw([$this->edge('a', [new Waypoint(0, 0), new Waypoint(0, 3)], EdgeStrokeStyle::Heavy)]);
 
-        $renderer->renderRoute($canvas, $route);
-
-        self::assertSame('━━━━', (new PlainTextFormatter())->format($canvas));
+        self::assertSame('━━━▶', (new PlainTextFormatter())->format($canvas));
     }
 
     #[Test]
     public function twoEdgesCrossingProduceCrossingCharacter(): void
     {
-        $canvas = new Canvas();
-        $horizontalRoute = new EdgeRoute(
-            waypoints: [new Waypoint(2, 0), new Waypoint(2, 4)],
-            edgeId: 1,
-            targetArrow: false,
-        );
-        $verticalRoute = new EdgeRoute(
-            waypoints: [new Waypoint(0, 2), new Waypoint(4, 2)],
-            edgeId: 2,
-            targetArrow: false,
-        );
-        $renderer = new EdgeRenderer();
-
-        $renderer->renderRoute($canvas, $horizontalRoute);
-        $renderer->renderRoute($canvas, $verticalRoute);
+        $canvas = $this->draw([
+            $this->edge('a', [new Waypoint(2, 0), new Waypoint(2, 4)]),
+            $this->edge('b', [new Waypoint(0, 2), new Waypoint(4, 2)]),
+        ]);
 
         self::assertSame('┼', $canvas->get(2, 2)->resolvedCharacter());
-    }
-
-    #[Test]
-    public function rendersBoxWithVerticalEdge(): void
-    {
-        $canvas = new Canvas();
-        $boxRenderer = new BoxRenderer();
-        $edgeRenderer = new EdgeRenderer();
-
-        $nodeA = new Node('A', 'Start');
-        $nodeB = new Node('B', 'End');
-
-        $boxRenderer->render($canvas, $this->buildLayoutGraph($nodeA, row: 0, column: 0));
-
-        $centerColumn = intdiv($nodeA->boxWidth(), 2);
-        $edgeStartRow = $nodeA->boxHeight();
-        $edgeEndRow = $edgeStartRow + 2;
-
-        $edgeRenderer->renderRoute($canvas, new EdgeRoute(
-            waypoints: [
-                new Waypoint($edgeStartRow, $centerColumn),
-                new Waypoint($edgeEndRow, $centerColumn),
-            ],
-            edgeId: 1,
-        ));
-
-        $boxRenderer->render($canvas, $this->buildLayoutGraph($nodeB, row: $edgeEndRow + 1, column: 0));
-
-        $expected = <<<'EXPECTED'
-        ╭───────╮
-        │ Start │
-        ╰───────╯
-            │
-            │
-            ▼
-        ╭─────╮
-        │ End │
-        ╰─────╯
-        EXPECTED;
-
-        self::assertSame($expected, (new PlainTextFormatter())->format($canvas));
     }
 
     #[Test]
@@ -753,14 +566,27 @@ final class EdgeRendererTest extends TestCase
         self::assertLessThan(400.0, $elapsedMilliseconds, sprintf('Dense fan edge rendering took %.1f ms', $elapsedMilliseconds));
     }
 
-    private function buildLayoutGraph(Node $node, int $row = 0, int $column = 0): LayoutGraph
+    /** @param list<LayoutEdge> $edges */
+    private function draw(array $edges, bool $unicodeGlyphs = true): Canvas
     {
-        $graph = new Graph();
-        $graph->addNode($node);
-        $layoutGraph = LayoutGraph::fromGraph($graph);
-        $layoutGraph->getLayoutNode($node->id)->row = $row;
-        $layoutGraph->getLayoutNode($node->id)->column = $column;
+        $graph = new LayoutGraph();
+        foreach ($edges as $edge) {
+            $graph->addNode(new DummyLayoutNode($edge->edge->sourceId, $edge->edge->sourceId, $edge->edge->targetId));
+            $graph->addNode(new DummyLayoutNode($edge->edge->targetId, $edge->edge->sourceId, $edge->edge->targetId));
+            $graph->addEdge($edge);
+        }
+        $canvas = new Canvas($unicodeGlyphs);
+        (new EdgeRenderer(unicodeGlyphs: $unicodeGlyphs))->render($canvas, $graph);
 
-        return $layoutGraph;
+        return $canvas;
+    }
+
+    /** @param list<Waypoint> $waypoints */
+    private function edge(string $name, array $waypoints, EdgeStrokeStyle $strokeStyle = EdgeStrokeStyle::Solid, bool $reversed = false, ?AnsiColor $color = null): LayoutEdge
+    {
+        $edge = new LayoutEdge(new Edge($name.'-from', $name.'-to', $strokeStyle, color: $color), $reversed);
+        $edge->waypoints = $waypoints;
+
+        return $edge;
     }
 }

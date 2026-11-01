@@ -29,7 +29,7 @@ final class DummyNodeInserterTest extends TestCase
 
         (new DummyNodeInserter())->process($graph);
 
-        self::assertSame(2, $graph->nodeCount());
+        self::assertCount(2, $graph->nodeIds());
         self::assertCount(1, $graph->edges());
         self::assertSame('A', $graph->edges()[0]->sourceId());
         self::assertSame('B', $graph->edges()[0]->targetId());

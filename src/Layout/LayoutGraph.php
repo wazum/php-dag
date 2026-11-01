@@ -183,32 +183,6 @@ final class LayoutGraph
         return $this->predecessorMap[$nodeId] ?? [];
     }
 
-    /** @return list<string> */
-    public function roots(): array
-    {
-        $roots = [];
-        foreach (array_keys($this->nodes) as $nodeId) {
-            if (!isset($this->predecessorMap[$nodeId])) {
-                $roots[] = strval($nodeId);
-            }
-        }
-
-        return $roots;
-    }
-
-    /** @return list<string> */
-    public function leaves(): array
-    {
-        $leaves = [];
-        foreach (array_keys($this->nodes) as $nodeId) {
-            if (!isset($this->successorMap[$nodeId])) {
-                $leaves[] = strval($nodeId);
-            }
-        }
-
-        return $leaves;
-    }
-
     /** @return list<LayoutEdge> */
     public function incomingEdges(string $nodeId): array
     {
@@ -311,19 +285,9 @@ final class LayoutGraph
         return $this->layerIndex;
     }
 
-    public function layerCount(): int
-    {
-        return count($this->layerIndex);
-    }
-
     public function hasNode(string $nodeId): bool
     {
         return isset($this->nodes[$nodeId]);
-    }
-
-    public function nodeCount(): int
-    {
-        return count($this->nodes);
     }
 
     public function addNode(LayoutNode $node): void

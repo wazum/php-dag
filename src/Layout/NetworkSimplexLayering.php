@@ -43,16 +43,12 @@ namespace PhpDag\Layout;
 final class NetworkSimplexLayering implements LayerAssignment
 {
     /**
-     * Explicit upper bound on simplex exchanges per component. The method is
-     * finite and converges well within this on real graphs; it only guards
-     * against pathological input. If the bound is reached the ranking returned
-     * is still feasible (every minlen honoured) but no longer guaranteed
-     * cost-optimal — raise the budget for such inputs.
+     * Upper bound on simplex exchanges per component. The method converges well
+     * within this on real graphs; it only guards against pathological input. If
+     * the bound is reached, the ranking is still feasible (every minlen
+     * honoured) but no longer guaranteed cost-optimal.
      */
-    public function __construct(
-        private readonly int $maxExchanges = 1000,
-    ) {
-    }
+    private const MAX_EXCHANGES = 1000;
 
     /** @return array<string, int> */
     public function assign(LayoutGraph $graph): array
@@ -138,7 +134,7 @@ final class NetworkSimplexLayering implements LayerAssignment
         $rank = $this->longestPathRank($nodes, $edges);
         $tree = $this->feasibleTree($nodes, $edges, $rank);
 
-        for ($exchange = 0; $exchange < $this->maxExchanges; ++$exchange) {
+        for ($exchange = 0; $exchange < self::MAX_EXCHANGES; ++$exchange) {
             $leaving = $this->leaveEdge($tree);
             if (null === $leaving) {
                 break;

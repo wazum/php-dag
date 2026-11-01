@@ -59,29 +59,12 @@ final class EdgeGlyphsTest extends TestCase
     }
 
     #[Test]
-    public function verticalAndHorizontalConvenienceMethods(): void
-    {
-        $glyphs = self::createSolidGlyphs();
-
-        self::assertSame('│', $glyphs->vertical());
-        self::assertSame('─', $glyphs->horizontal());
-    }
-
-    #[Test]
     public function arrowForRejectsInvalidDirection(): void
     {
         $glyphs = self::createSolidGlyphs();
 
         $this->expectException(InvalidArgumentException::class);
         $glyphs->arrowFor(99);
-    }
-
-    #[Test]
-    public function crossingCharacterReturnsHopByDefault(): void
-    {
-        $glyphs = self::createSolidGlyphs();
-
-        self::assertSame(')', $glyphs->crossingCharacter());
     }
 
     private static function createSolidGlyphs(): EdgeGlyphs

@@ -15,8 +15,6 @@ final readonly class EdgeRoute
         public array $waypoints,
         public int $edgeId,
         public EdgeStrokeStyle $strokeStyle = EdgeStrokeStyle::Solid,
-        public bool $sourceArrow = false,
-        public bool $targetArrow = true,
         public ?AnsiColor $color = null,
     ) {
         if (count($this->waypoints) < 2) {

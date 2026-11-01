@@ -27,6 +27,6 @@ final class LayerAssignerTest extends TestCase
 
         self::assertSame(0, $layoutGraph->getLayoutNode('A')->layer);
         self::assertSame(1, $layoutGraph->getLayoutNode('B')->layer);
-        self::assertSame(2, $layoutGraph->layerCount());
+        self::assertCount(2, $layoutGraph->layerIndex());
     }
 }

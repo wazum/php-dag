@@ -12,6 +12,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Faster on long and wide graphs: a 2000-node chain renders in about half the time (0.10 s instead of 0.21 s), `render()` formats the drawing once instead of twice, and graphs with thousands of separate pieces no longer slow down layering.
 - A fan-out whose labelled branch sits between two siblings lifts its bar one row, so the label gets its own row under the bar. Labelled fan-outs in the same gap only take separate rows when their bars and labels would collide.
 
+### Removed
+
+These are breaking changes; the next release is 2.0.0.
+
+- `LayoutGraph::roots()`, `leaves()`, `nodeCount()` and `layerCount()`: use `predecessors()`, `successors()`, `count($graph->nodeIds())` and `count($graph->layerIndex())`. `Graph::roots()`, `leaves()` and `nodeCount()` stay.
+- `EdgeRenderer::renderRoute()` and the `sourceArrow`/`targetArrow` parameters of `EdgeRoute`: `EdgeRenderer::render()` draws each edge's arrow from the layout.
+- `EdgeGlyphs::crossingCharacter()`, `vertical()` and `horizontal()`, and the `crossingCharacter` constructor parameter: use `junctionFor()`.
+- The `median` parameter of `MedianOrdering` and the `maxExchanges` parameter of `NetworkSimplexLayering`.
+
 ### Fixed
 
 - The DOT parser needs about half the memory: a 1 MB file with 20 000 edges peaks at 62 MB instead of 118 MB, so it fits PHP's default 128 MB limit.

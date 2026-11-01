@@ -10,12 +10,10 @@ use PhpDag\Graph\Node;
 use PhpDag\Layout\LayoutGraph;
 use PhpDag\Render\BoxRenderer;
 use PhpDag\Render\Canvas;
-use PhpDag\Render\EdgeRenderer;
-use PhpDag\Render\EdgeRoute;
 use PhpDag\Render\ElementRenderer;
 use PhpDag\Render\GroupRenderer;
 use PhpDag\Render\PlainTextFormatter;
-use PhpDag\Render\Waypoint;
+use PhpDag\Style\EdgeStrokeStyle;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -70,10 +68,7 @@ final class GroupRendererTest extends TestCase
         $canvas = $this->canvasWithGroup(memberTitle: 'Member', label: 'Lbl', row: 3, column: 4);
         // The left border line lands on column 2. Route a horizontal edge across
         // it at row 4 so the renderer must replace the plain ║ with a ╫ junction.
-        (new EdgeRenderer())->renderRoute(
-            $canvas,
-            new EdgeRoute(waypoints: [new Waypoint(4, 0), new Waypoint(4, 3)], edgeId: 1, targetArrow: false),
-        );
+        $canvas->horizontalLine(4, 0, 3, 1, EdgeStrokeStyle::Solid, 5);
 
         (new GroupRenderer())->render($canvas, $this->lastLayoutGraph);
 
@@ -89,10 +84,7 @@ final class GroupRendererTest extends TestCase
         // Drop a vertical edge through the top border at column 5, where the
         // left-aligned label would otherwise sit; the label must slide right of
         // the crossing.
-        (new EdgeRenderer())->renderRoute(
-            $canvas,
-            new EdgeRoute(waypoints: [new Waypoint(0, 5), new Waypoint(2, 5)], edgeId: 1, targetArrow: false),
-        );
+        $canvas->verticalLine(5, 0, 2, 1, EdgeStrokeStyle::Solid, 5);
 
         (new GroupRenderer())->render($canvas, $this->lastLayoutGraph);
 
@@ -108,10 +100,7 @@ final class GroupRendererTest extends TestCase
         // crossing, so the label falls back onto it; the crossing junction must
         // be redrawn on top so the edge still reads as passing through.
         $canvas = $this->canvasWithGroup(memberTitle: 'X', label: 'WIDER', row: 3, column: 4);
-        (new EdgeRenderer())->renderRoute(
-            $canvas,
-            new EdgeRoute(waypoints: [new Waypoint(0, 6), new Waypoint(2, 6)], edgeId: 1, targetArrow: false),
-        );
+        $canvas->verticalLine(6, 0, 2, 1, EdgeStrokeStyle::Solid, 5);
 
         (new GroupRenderer())->render($canvas, $this->lastLayoutGraph);
 
@@ -129,10 +118,7 @@ final class GroupRendererTest extends TestCase
         // rather than display columns underestimates its span and leaves the
         // covered crossing erased.
         $canvas = $this->canvasWithGroup(memberTitle: 'Member', label: '日本語', row: 3, column: 4);
-        (new EdgeRenderer())->renderRoute(
-            $canvas,
-            new EdgeRoute(waypoints: [new Waypoint(0, 9), new Waypoint(2, 9)], edgeId: 1, targetArrow: false),
-        );
+        $canvas->verticalLine(9, 0, 2, 1, EdgeStrokeStyle::Solid, 5);
 
         (new GroupRenderer())->render($canvas, $this->lastLayoutGraph);
 
@@ -148,10 +134,7 @@ final class GroupRendererTest extends TestCase
         // clear both crossings, not just the first one detected.
         $canvas = $this->canvasWithGroup(memberTitle: 'Member', label: 'AB', row: 3, column: 4);
         foreach ([5, 9] as $column) {
-            (new EdgeRenderer())->renderRoute(
-                $canvas,
-                new EdgeRoute(waypoints: [new Waypoint(0, $column), new Waypoint(2, $column)], edgeId: $column, targetArrow: false),
-            );
+            $canvas->verticalLine($column, 0, 2, $column, EdgeStrokeStyle::Solid, 5);
         }
 
         (new GroupRenderer())->render($canvas, $this->lastLayoutGraph);

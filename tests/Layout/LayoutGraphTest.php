@@ -29,7 +29,7 @@ final class LayoutGraphTest extends TestCase
 
         $layoutGraph = LayoutGraph::fromGraph($graph);
 
-        self::assertSame(2, $layoutGraph->nodeCount());
+        self::assertCount(2, $layoutGraph->nodeIds());
         self::assertInstanceOf(RealLayoutNode::class, $layoutGraph->getLayoutNode('A'));
         self::assertSame('A', $layoutGraph->getLayoutNode('A')->id);
         self::assertSame('B', $layoutGraph->getLayoutNode('B')->id);
@@ -111,7 +111,7 @@ final class LayoutGraphTest extends TestCase
         $layoutGraph = LayoutGraph::fromGraph($graph);
         $layoutGraph->replaceEdges([$layoutGraph->outgoingEdges('A')[0]], []);
 
-        self::assertSame(['A', 'B'], $layoutGraph->leaves());
+        self::assertSame([], $layoutGraph->successors('A'));
     }
 
     #[Test]
@@ -125,40 +125,7 @@ final class LayoutGraphTest extends TestCase
         $layoutGraph = LayoutGraph::fromGraph($graph);
         $layoutGraph->replaceEdges([$layoutGraph->incomingEdges('B')[0]], []);
 
-        self::assertSame(['A', 'B'], $layoutGraph->roots());
-    }
-
-    #[Test]
-    public function returnsRootsAndLeaves(): void
-    {
-        $graph = new Graph();
-        $graph->addNode(new Node('A', 'Alpha'));
-        $graph->addNode(new Node('B', 'Beta'));
-        $graph->addNode(new Node('C', 'Gamma'));
-        $graph->addEdge(new Edge('A', 'B'));
-        $graph->addEdge(new Edge('B', 'C'));
-
-        $layoutGraph = LayoutGraph::fromGraph($graph);
-
-        self::assertSame(['A'], $layoutGraph->roots());
-        self::assertSame(['C'], $layoutGraph->leaves());
-    }
-
-    #[Test]
-    public function returnsMultipleRootsAndLeaves(): void
-    {
-        $graph = new Graph();
-        $graph->addNode(new Node('A', 'Alpha'));
-        $graph->addNode(new Node('B', 'Beta'));
-        $graph->addNode(new Node('C', 'Gamma'));
-        $graph->addNode(new Node('D', 'Delta'));
-        $graph->addEdge(new Edge('A', 'C'));
-        $graph->addEdge(new Edge('B', 'D'));
-
-        $layoutGraph = LayoutGraph::fromGraph($graph);
-
-        self::assertSame(['A', 'B'], $layoutGraph->roots());
-        self::assertSame(['C', 'D'], $layoutGraph->leaves());
+        self::assertSame([], $layoutGraph->predecessors('B'));
     }
 
     #[Test]
@@ -228,8 +195,8 @@ final class LayoutGraphTest extends TestCase
 
         $layoutGraph->buildLayerIndex();
 
-        self::assertSame(2, $layoutGraph->layerCount());
         $index = $layoutGraph->layerIndex();
+        self::assertCount(2, $index);
         self::assertSame(['A'], $index[0]);
         self::assertEqualsCanonicalizing(['B', 'C'], $index[1]);
     }
@@ -283,7 +250,7 @@ final class LayoutGraphTest extends TestCase
 
         self::assertTrue($layoutGraph->hasNode('__dummy_A_B_1'));
         self::assertSame($dummy, $layoutGraph->getLayoutNode('__dummy_A_B_1'));
-        self::assertSame(2, $layoutGraph->nodeCount());
+        self::assertCount(2, $layoutGraph->nodeIds());
     }
 
     #[Test]
@@ -382,7 +349,7 @@ final class LayoutGraphTest extends TestCase
         $layoutGraph->removeNodes(['B']);
 
         self::assertFalse($layoutGraph->hasNode('B'));
-        self::assertSame(1, $layoutGraph->nodeCount());
+        self::assertCount(1, $layoutGraph->nodeIds());
         self::assertSame([], $layoutGraph->successors('A'));
         self::assertSame([], $layoutGraph->outgoingEdges('A'));
         self::assertSame([], $layoutGraph->edges());

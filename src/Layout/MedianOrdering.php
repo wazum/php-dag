@@ -16,7 +16,6 @@ final readonly class MedianOrdering implements CrossingMinimization
     public function __construct(
         private int $maxSweeps = 24,
         private bool $transpose = true,
-        private WeightedMedian $median = new WeightedMedian(),
     ) {
     }
 
@@ -85,7 +84,7 @@ final readonly class MedianOrdering implements CrossingMinimization
             /** @infection-ignore-all cast is for type consistency; PHP handles int/float comparison identically */
             $medians[$nodeId] = [] === $positions
                 ? (float) $index
-                : $this->median->value($positions);
+                : (new WeightedMedian())->value($positions);
         }
 
         usort($nodeIds, static fn (string $leftNodeId, string $rightNodeId): int => $medians[$leftNodeId] <=> $medians[$rightNodeId]);

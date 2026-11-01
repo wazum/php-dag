@@ -34,27 +34,6 @@ final readonly class EdgeRenderer implements ElementRenderer
         $this->renderEdges($canvas, $graph, $graph->selfLoops(), count($graph->edges()));
     }
 
-    public function renderRoute(Canvas $canvas, EdgeRoute $route): void
-    {
-        $waypoints = $route->waypoints;
-        $lastIndex = count($waypoints) - 1;
-        $color = $route->color;
-
-        for ($waypointOffset = 0; $waypointOffset < $lastIndex; ++$waypointOffset) {
-            $this->drawSegment($canvas, $waypoints[$waypointOffset], $waypoints[$waypointOffset + 1], $route->edgeId, $route->strokeStyle, $color);
-        }
-
-        /** @psalm-suppress InvalidArrayOffset,MixedArgument EdgeRoute guarantees at least 2 waypoints */
-        if ($route->targetArrow) {
-            $this->drawArrow($canvas, $waypoints[$lastIndex - 1], $waypoints[$lastIndex], $route->strokeStyle, $color);
-        }
-
-        /** @psalm-suppress InvalidArrayOffset,MixedArgument EdgeRoute guarantees at least 2 waypoints */
-        if ($route->sourceArrow) {
-            $this->drawArrow($canvas, $waypoints[1], $waypoints[0], $route->strokeStyle, $color);
-        }
-    }
-
     /**
      * @param list<LayoutEdge> $layoutEdges
      */
@@ -74,7 +53,6 @@ final readonly class EdgeRenderer implements ElementRenderer
                 waypoints: $layoutEdge->waypoints,
                 edgeId: $idOffset + $index + 1,
                 strokeStyle: $layoutEdge->edge->edgeStrokeStyle,
-                targetArrow: false,
                 color: $color,
             );
         }
@@ -159,7 +137,9 @@ final readonly class EdgeRenderer implements ElementRenderer
 
         foreach ($routes as $route) {
             if (null !== $route->color) {
-                $this->renderRoute($canvas, $route);
+                for ($index = 0, $lastIndex = count($route->waypoints) - 1; $index < $lastIndex; ++$index) {
+                    $this->drawSegment($canvas, $route->waypoints[$index], $route->waypoints[$index + 1], $route->edgeId, $route->strokeStyle, $route->color);
+                }
 
                 continue;
             }

@@ -31,11 +31,11 @@ final class DummyNodeRemoverTest extends TestCase
             edges: [new Edge('A', 'B'), new Edge('B', 'C'), new Edge('A', 'C')],
         );
 
-        self::assertSame(4, $graph->nodeCount());
+        self::assertCount(4, $graph->nodeIds());
 
         (new DummyNodeRemover())->process($graph);
 
-        self::assertSame(3, $graph->nodeCount());
+        self::assertCount(3, $graph->nodeIds());
         self::assertFalse($graph->hasNode('__dummy_A_C_1'));
     }
 
