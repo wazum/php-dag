@@ -328,6 +328,10 @@ final class CycleBreakerTest extends TestCase
     #[Test]
     public function breaksLargeSparseStronglyConnectedGraphWithoutQuadraticRescans(): void
     {
+        if (extension_loaded('xdebug')) {
+            self::markTestSkipped('Wall-clock timing is unreliable under Xdebug (coverage/mutation runs).');
+        }
+
         $graph = new Graph();
         $nodeCount = 2000;
         for ($index = 0; $index < $nodeCount; ++$index) {

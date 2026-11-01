@@ -167,6 +167,10 @@ final class DummyNodeInserterTest extends TestCase
     #[Test]
     public function expandsManyLongEdgesWithoutFilteringTheWholeGraphPerEdge(): void
     {
+        if (extension_loaded('xdebug')) {
+            self::markTestSkipped('Wall-clock timing is unreliable under Xdebug (coverage/mutation runs).');
+        }
+
         $graph = new Graph();
         $graph->addNode(new Node('source', 'Source'));
         $edgeCount = 2000;
