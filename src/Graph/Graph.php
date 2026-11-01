@@ -351,7 +351,7 @@ final class Graph
      */
     public function highlightPath(array $nodeIds, EdgeStrokeStyle $strokeStyle = EdgeStrokeStyle::Heavy): self
     {
-        $this->assertPathEdgesExist($nodeIds);
+        $this->assertPathExists($nodeIds);
 
         for ($pathOffset = 0, $edgeCount = count($nodeIds) - 1; $pathOffset < $edgeCount; ++$pathOffset) {
             $this->replaceEdgeStyle($nodeIds[$pathOffset], $nodeIds[$pathOffset + 1], $strokeStyle);
@@ -365,8 +365,7 @@ final class Graph
      */
     public function colorPath(array $nodeIds, AnsiColor $color): self
     {
-        $this->assertPathEdgesExist($nodeIds);
-        $this->assertNodesExist($nodeIds);
+        $this->assertPathExists($nodeIds);
 
         for ($pathOffset = 0, $edgeCount = count($nodeIds) - 1; $pathOffset < $edgeCount; ++$pathOffset) {
             $this->replaceEdgeColor($nodeIds[$pathOffset], $nodeIds[$pathOffset + 1], $color);
@@ -453,13 +452,14 @@ final class Graph
      *
      * @param list<string> $nodeIds
      */
-    private function assertPathEdgesExist(array $nodeIds): void
+    private function assertPathExists(array $nodeIds): void
     {
         for ($pathOffset = 0, $edgeCount = count($nodeIds) - 1; $pathOffset < $edgeCount; ++$pathOffset) {
             if (!$this->hasEdgeBetween($nodeIds[$pathOffset], $nodeIds[$pathOffset + 1])) {
                 throw new InvalidArgumentException(sprintf('No edge from "%s" to "%s"', $nodeIds[$pathOffset], $nodeIds[$pathOffset + 1]));
             }
         }
+        $this->assertNodesExist($nodeIds);
     }
 
     private function hasEdgeBetween(string $sourceId, string $targetId): bool

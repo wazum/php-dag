@@ -513,6 +513,17 @@ final class GraphTest extends TestCase
     }
 
     #[Test]
+    public function highlightPathThrowsForMissingSingleNode(): void
+    {
+        $graph = new Graph();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Node "ghost" does not exist');
+
+        $graph->highlightPath(['ghost']);
+    }
+
+    #[Test]
     public function colorPathThrowsForMissingSingleNode(): void
     {
         $graph = new Graph();

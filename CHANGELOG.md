@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Boxes in one layer no longer overlap when a feedback edge skips that layer (`r -> b; r -> x; b -> z; z -> r`); the positioner now aligns nodes only with neighbours in the adjacent layer.
 - A feedback edge no longer runs through a neighbouring box: when a box blocks the usual side (east, or south in left-to-right flow), the edge takes the opposite side if that side is free.
 - A self-loop on a node that also has a feedback edge no longer merges with it: the loop moves to the free side of the box (west in top-to-bottom flow, top in left-to-right flow).
+- DOT input: a quoted keyword such as `"node"` or `"subgraph"` is a plain node id, so graphs with such ids survive a `toDot()` round trip.
+- `Graph::highlightPath()` rejects a one-node path naming a missing node, like `colorPath()` does.
+- No `SplObjectStorage` deprecation notices on PHP 8.5.
 - DOT input: an empty node label (`label=""`, `label=<>`) falls back to the node id instead of throwing, an empty edge label means no label, and `\n` in an edge label becomes a space instead of gluing the words together.
 - `Graph::isCyclic()` no longer throws a `TypeError` for numeric node ids such as `1 -> 2`.
 - A node with two or more parallel edge pairs (`a -> b; a -> b; a -> c; a -> c`) no longer crashes the layout with a division by zero.
