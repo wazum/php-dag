@@ -17,6 +17,7 @@ final class DotParser
 {
     private const KIND_SYMBOL = 'symbol';
     private const KIND_IDENTIFIER = 'identifier';
+    private const KIND_QUOTED = 'quoted';
 
     /** @var list<array{kind: string, value: string, offset: int}> */
     private array $tokens = [];
@@ -138,10 +139,11 @@ final class DotParser
             return;
         }
 
+        $keyword = $this->peekKeyword();
         $identifier = $this->advanceIdentifier();
         $this->skipOptionalPort();
 
-        if ('subgraph' === strtolower($identifier)) {
+        if ('subgraph' === $keyword) {
             $subgraphName = null;
             if (!$this->peekIsSymbol('{')) {
                 $subgraphName = $this->advanceIdentifier();
@@ -164,8 +166,8 @@ final class DotParser
             } else {
                 $this->graphAttributes[$lowerIdentifier] = $value;
             }
-        } elseif ($this->peekIsSymbol('[') && in_array(strtolower($identifier), ['graph', 'node', 'edge'], true)) {
-            $this->applyDefaultAttributes(strtolower($identifier), $this->parseOptionalAttributes());
+        } elseif ($this->peekIsSymbol('[') && in_array($keyword, ['graph', 'node', 'edge'], true)) {
+            $this->applyDefaultAttributes($keyword, $this->parseOptionalAttributes());
         } elseif ($this->peekIsSymbol('->')) {
             $this->parseEdgeStatement($identifier);
         } else {
@@ -401,7 +403,7 @@ final class DotParser
     private function advanceIdentifier(): string
     {
         $token = $this->advance();
-        if (self::KIND_IDENTIFIER !== $token['kind']) {
+        if (self::KIND_SYMBOL === $token['kind']) {
             throw $this->syntaxError(sprintf('Expected identifier, got "%s"', ControlCharacters::escape($token['value'])), $token['offset']);
         }
 
@@ -416,6 +418,13 @@ final class DotParser
         }
 
         return $this->tokens[$this->position++];
+    }
+
+    private function peekKeyword(): ?string
+    {
+        $token = $this->tokens[$this->position] ?? null;
+
+        return null !== $token && self::KIND_IDENTIFIER === $token['kind'] ? strtolower($token['value']) : null;
     }
 
     private function peekIsSymbol(string $value): bool
@@ -492,7 +501,7 @@ final class DotParser
                     throw $this->syntaxError('Unterminated quoted string in DOT input', $stringStart);
                 }
                 ++$offset;
-                $tokens[] = ['kind' => self::KIND_IDENTIFIER, 'value' => $value, 'offset' => $stringStart];
+                $tokens[] = ['kind' => self::KIND_QUOTED, 'value' => $value, 'offset' => $stringStart];
                 continue;
             }
 
@@ -512,7 +521,7 @@ final class DotParser
                 } while ($depth > 0);
 
                 $innerHtml = substr($dot, $start + 1, $offset - $start - 2);
-                $tokens[] = ['kind' => self::KIND_IDENTIFIER, 'value' => $this->htmlLabelToText($innerHtml), 'offset' => $start];
+                $tokens[] = ['kind' => self::KIND_QUOTED, 'value' => $this->htmlLabelToText($innerHtml), 'offset' => $start];
                 continue;
             }
 

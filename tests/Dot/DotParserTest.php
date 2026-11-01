@@ -108,6 +108,15 @@ final class DotParserTest extends TestCase
     }
 
     #[Test]
+    public function quotedKeywordsAreNodeIds(): void
+    {
+        $graph = (new DotParser())->parse('digraph { "node" [label="N"]; "subgraph" -> "edge" }');
+
+        self::assertSame('N', $graph->getNode('node')->title);
+        self::assertSame(['node', 'subgraph', 'edge'], array_keys($graph->nodes()));
+    }
+
+    #[Test]
     public function emptyEdgeLabelMeansNoLabel(): void
     {
         $graph = (new DotParser())->parse('digraph { a -> b [label=""] }');
