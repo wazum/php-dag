@@ -894,21 +894,6 @@ final class AsciiDagTest extends TestCase
         }
     }
 
-    /**
-     * @return list<int>
-     */
-    private function columnsOf(string $line, string $needle): array
-    {
-        $columns = [];
-        foreach (mb_str_split($line) as $column => $glyph) {
-            if ($glyph === $needle) {
-                $columns[] = $column;
-            }
-        }
-
-        return $columns;
-    }
-
     #[Test]
     public function rendersDiamondGraphWithMinimalCrossings(): void
     {
@@ -1351,17 +1336,6 @@ final class AsciiDagTest extends TestCase
         );
     }
 
-    private static function lineIndexContaining(string $output, string $needle): int
-    {
-        foreach (explode("\n", $output) as $index => $line) {
-            if (str_contains($line, $needle)) {
-                return $index;
-            }
-        }
-
-        self::fail(sprintf('Output does not contain "%s"', $needle));
-    }
-
     #[Test]
     public function cyclicGraphKeepsForwardChainStraight(): void
     {
@@ -1660,5 +1634,31 @@ final class AsciiDagTest extends TestCase
             .'                                       ╰─────────────────────╯';
 
         self::assertSame($expected, $result, sprintf("Every constraint must be traceable to its edge:\n%s", $result));
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function columnsOf(string $line, string $needle): array
+    {
+        $columns = [];
+        foreach (mb_str_split($line) as $column => $glyph) {
+            if ($glyph === $needle) {
+                $columns[] = $column;
+            }
+        }
+
+        return $columns;
+    }
+
+    private static function lineIndexContaining(string $output, string $needle): int
+    {
+        foreach (explode("\n", $output) as $index => $line) {
+            if (str_contains($line, $needle)) {
+                return $index;
+            }
+        }
+
+        self::fail(sprintf('Output does not contain "%s"', $needle));
     }
 }

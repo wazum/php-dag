@@ -13,14 +13,6 @@ use PHPUnit\Framework\TestCase;
 
 final class EdgeGlyphsTest extends TestCase
 {
-    private static function createSolidGlyphs(): EdgeGlyphs
-    {
-        return new EdgeGlyphs(
-            [' ', '│', '─', '└', '│', '│', '┌', '├', '─', '┘', '─', '┴', '┐', '┤', '┬', '┼'],
-            ['▲', '▶', '▼', '◀'],
-        );
-    }
-
     /**
      * @return iterable<string, array{int, string}>
      */
@@ -90,5 +82,13 @@ final class EdgeGlyphsTest extends TestCase
         $glyphs = self::createSolidGlyphs();
 
         self::assertSame(')', $glyphs->crossingCharacter());
+    }
+
+    private static function createSolidGlyphs(): EdgeGlyphs
+    {
+        return new EdgeGlyphs(
+            [' ', '│', '─', '└', '│', '│', '┌', '├', '─', '┘', '─', '┴', '┐', '┤', '┬', '┼'],
+            ['▲', '▶', '▼', '◀'],
+        );
     }
 }

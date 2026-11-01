@@ -6,14 +6,13 @@ namespace PhpDag\Layout;
 
 enum LayoutQuality
 {
+    case Fast;
+    case Standard;
+    case Quality;
     /** @infection-ignore-all convergence cap; ±1 sweeps yield identical orderings (MedianOrdering documents the same) */
     private const FAST_SWEEPS = 4;
     /** @infection-ignore-all convergence cap; ±1 sweeps yield identical orderings */
     private const QUALITY_SWEEPS = 64;
-
-    case Fast;
-    case Standard;
-    case Quality;
 
     /**
      * Network-simplex layering minimises total edge length for a more compact

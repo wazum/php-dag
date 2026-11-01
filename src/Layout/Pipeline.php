@@ -60,6 +60,13 @@ final class Pipeline
         return false;
     }
 
+    public function execute(LayoutGraph $graph): void
+    {
+        foreach ($this->processors as $processor) {
+            $processor->process($graph);
+        }
+    }
+
     /** @param class-string<Processor> $processorClass */
     private function indexOf(string $processorClass): int
     {
@@ -70,12 +77,5 @@ final class Pipeline
         }
 
         throw new InvalidArgumentException(sprintf('Pipeline contains no processor of class "%s"', $processorClass));
-    }
-
-    public function execute(LayoutGraph $graph): void
-    {
-        foreach ($this->processors as $processor) {
-            $processor->process($graph);
-        }
     }
 }

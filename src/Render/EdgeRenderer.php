@@ -34,6 +34,27 @@ final readonly class EdgeRenderer implements ElementRenderer
         $this->renderEdges($canvas, $graph, $graph->selfLoops(), count($graph->edges()));
     }
 
+    public function renderRoute(Canvas $canvas, EdgeRoute $route): void
+    {
+        $waypoints = $route->waypoints;
+        $lastIndex = count($waypoints) - 1;
+        $color = $route->color;
+
+        for ($waypointOffset = 0; $waypointOffset < $lastIndex; ++$waypointOffset) {
+            $this->drawSegment($canvas, $waypoints[$waypointOffset], $waypoints[$waypointOffset + 1], $route->edgeId, $route->strokeStyle, $color);
+        }
+
+        /** @psalm-suppress InvalidArrayOffset,MixedArgument EdgeRoute guarantees at least 2 waypoints */
+        if ($route->targetArrow) {
+            $this->drawArrow($canvas, $waypoints[$lastIndex - 1], $waypoints[$lastIndex], $route->strokeStyle, $color);
+        }
+
+        /** @psalm-suppress InvalidArrayOffset,MixedArgument EdgeRoute guarantees at least 2 waypoints */
+        if ($route->sourceArrow) {
+            $this->drawArrow($canvas, $waypoints[1], $waypoints[0], $route->strokeStyle, $color);
+        }
+    }
+
     /**
      * @param list<LayoutEdge> $layoutEdges
      */
@@ -225,27 +246,6 @@ final readonly class EdgeRenderer implements ElementRenderer
         $merged[] = [$currentStart, $currentEnd];
 
         return $merged;
-    }
-
-    public function renderRoute(Canvas $canvas, EdgeRoute $route): void
-    {
-        $waypoints = $route->waypoints;
-        $lastIndex = count($waypoints) - 1;
-        $color = $route->color;
-
-        for ($waypointOffset = 0; $waypointOffset < $lastIndex; ++$waypointOffset) {
-            $this->drawSegment($canvas, $waypoints[$waypointOffset], $waypoints[$waypointOffset + 1], $route->edgeId, $route->strokeStyle, $color);
-        }
-
-        /** @psalm-suppress InvalidArrayOffset,MixedArgument EdgeRoute guarantees at least 2 waypoints */
-        if ($route->targetArrow) {
-            $this->drawArrow($canvas, $waypoints[$lastIndex - 1], $waypoints[$lastIndex], $route->strokeStyle, $color);
-        }
-
-        /** @psalm-suppress InvalidArrayOffset,MixedArgument EdgeRoute guarantees at least 2 waypoints */
-        if ($route->sourceArrow) {
-            $this->drawArrow($canvas, $waypoints[1], $waypoints[0], $route->strokeStyle, $color);
-        }
     }
 
     private function renderNodeConnection(Canvas $canvas, RealLayoutNode $node, Waypoint $waypoint, int $edgeId, EdgePort $port, EdgeStrokeStyle $strokeStyle, ?AnsiColor $color): void

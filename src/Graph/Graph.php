@@ -223,34 +223,6 @@ final class Graph
         return $orderedNodeIds;
     }
 
-    /**
-     * @param array<string, list<string>> $adjacencyByNodeId
-     *
-     * @return list<string>
-     */
-    private function reachableNodeIds(string $startNodeId, array $adjacencyByNodeId): array
-    {
-        $this->assertNodesExist([$startNodeId]);
-
-        /** @infection-ignore-all The visited set is only probed with isset(); the stored value is never read, so true and false behave identically. */
-        $visitedNodeIds = [$startNodeId => true];
-        $queuedNodeIds = [$startNodeId];
-        $reachableNodeIds = [];
-
-        for ($queueOffset = 0; isset($queuedNodeIds[$queueOffset]); ++$queueOffset) {
-            foreach ($adjacencyByNodeId[$queuedNodeIds[$queueOffset]] ?? [] as $adjacentNodeId) {
-                if (!isset($visitedNodeIds[$adjacentNodeId])) {
-                    /** @infection-ignore-all Only probed with isset(); the stored value is never read, so true and false behave identically. */
-                    $visitedNodeIds[$adjacentNodeId] = true;
-                    $queuedNodeIds[] = $adjacentNodeId;
-                    $reachableNodeIds[] = $adjacentNodeId;
-                }
-            }
-        }
-
-        return $reachableNodeIds;
-    }
-
     /** @return list<string> */
     public function roots(): array
     {
@@ -263,18 +235,6 @@ final class Graph
         }
 
         return $roots;
-    }
-
-    /** @return array<string, true> */
-    private function selfLoopedNodeIds(): array
-    {
-        $nodeIdSet = [];
-        foreach ($this->selfLoops as $loop) {
-            /** @infection-ignore-all the stored value is never read; roots()/leaves() test membership with isset(), which treats false the same as true */
-            $nodeIdSet[$loop->sourceId] = true;
-        }
-
-        return $nodeIdSet;
     }
 
     /** @return list<string> */
@@ -387,6 +347,79 @@ final class Graph
         return false;
     }
 
+    /**
+     * @param list<string> $nodeIds
+     */
+    public function highlightPath(array $nodeIds, EdgeStrokeStyle $strokeStyle = EdgeStrokeStyle::Heavy): self
+    {
+        $this->assertPathEdgesExist($nodeIds);
+
+        for ($pathOffset = 0, $edgeCount = count($nodeIds) - 1; $pathOffset < $edgeCount; ++$pathOffset) {
+            $this->replaceEdgeStyle($nodeIds[$pathOffset], $nodeIds[$pathOffset + 1], $strokeStyle);
+        }
+
+        return $this;
+    }
+
+    /**
+     * @param list<string> $nodeIds
+     */
+    public function colorPath(array $nodeIds, AnsiColor $color): self
+    {
+        $this->assertPathEdgesExist($nodeIds);
+        $this->assertNodesExist($nodeIds);
+
+        for ($pathOffset = 0, $edgeCount = count($nodeIds) - 1; $pathOffset < $edgeCount; ++$pathOffset) {
+            $this->replaceEdgeColor($nodeIds[$pathOffset], $nodeIds[$pathOffset + 1], $color);
+        }
+
+        foreach ($nodeIds as $nodeId) {
+            $this->nodes[$nodeId] = $this->nodes[$nodeId]->withColor($color);
+        }
+
+        return $this;
+    }
+
+    /**
+     * @param array<string, list<string>> $adjacencyByNodeId
+     *
+     * @return list<string>
+     */
+    private function reachableNodeIds(string $startNodeId, array $adjacencyByNodeId): array
+    {
+        $this->assertNodesExist([$startNodeId]);
+
+        /** @infection-ignore-all The visited set is only probed with isset(); the stored value is never read, so true and false behave identically. */
+        $visitedNodeIds = [$startNodeId => true];
+        $queuedNodeIds = [$startNodeId];
+        $reachableNodeIds = [];
+
+        for ($queueOffset = 0; isset($queuedNodeIds[$queueOffset]); ++$queueOffset) {
+            foreach ($adjacencyByNodeId[$queuedNodeIds[$queueOffset]] ?? [] as $adjacentNodeId) {
+                if (!isset($visitedNodeIds[$adjacentNodeId])) {
+                    /** @infection-ignore-all Only probed with isset(); the stored value is never read, so true and false behave identically. */
+                    $visitedNodeIds[$adjacentNodeId] = true;
+                    $queuedNodeIds[] = $adjacentNodeId;
+                    $reachableNodeIds[] = $adjacentNodeId;
+                }
+            }
+        }
+
+        return $reachableNodeIds;
+    }
+
+    /** @return array<string, true> */
+    private function selfLoopedNodeIds(): array
+    {
+        $nodeIdSet = [];
+        foreach ($this->selfLoops as $loop) {
+            /** @infection-ignore-all the stored value is never read; roots()/leaves() test membership with isset(), which treats false the same as true */
+            $nodeIdSet[$loop->sourceId] = true;
+        }
+
+        return $nodeIdSet;
+    }
+
     /** @param array<string, 'visiting'|'done'> $states */
     private function hasBackEdge(string $nodeId, array &$states): bool
     {
@@ -405,20 +438,6 @@ final class Graph
         $states[$nodeId] = 'done';
 
         return false;
-    }
-
-    /**
-     * @param list<string> $nodeIds
-     */
-    public function highlightPath(array $nodeIds, EdgeStrokeStyle $strokeStyle = EdgeStrokeStyle::Heavy): self
-    {
-        $this->assertPathEdgesExist($nodeIds);
-
-        for ($pathOffset = 0, $edgeCount = count($nodeIds) - 1; $pathOffset < $edgeCount; ++$pathOffset) {
-            $this->replaceEdgeStyle($nodeIds[$pathOffset], $nodeIds[$pathOffset + 1], $strokeStyle);
-        }
-
-        return $this;
     }
 
     /**
@@ -445,25 +464,6 @@ final class Graph
         }
 
         return false;
-    }
-
-    /**
-     * @param list<string> $nodeIds
-     */
-    public function colorPath(array $nodeIds, AnsiColor $color): self
-    {
-        $this->assertPathEdgesExist($nodeIds);
-        $this->assertNodesExist($nodeIds);
-
-        for ($pathOffset = 0, $edgeCount = count($nodeIds) - 1; $pathOffset < $edgeCount; ++$pathOffset) {
-            $this->replaceEdgeColor($nodeIds[$pathOffset], $nodeIds[$pathOffset + 1], $color);
-        }
-
-        foreach ($nodeIds as $nodeId) {
-            $this->nodes[$nodeId] = $this->nodes[$nodeId]->withColor($color);
-        }
-
-        return $this;
     }
 
     /** @param list<string> $nodeIds */

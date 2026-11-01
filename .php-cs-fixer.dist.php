@@ -28,6 +28,7 @@ return (new Config())
         'fully_qualified_strict_types' => [
             'import_symbols' => true,
         ],
+        'ordered_class_elements' => true,
         'phpdoc_to_comment' => [
             'ignored_tags' => ['psalm-suppress', 'infection-ignore-all'],
         ],

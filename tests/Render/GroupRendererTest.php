@@ -21,6 +21,8 @@ use PHPUnit\Framework\TestCase;
 
 final class GroupRendererTest extends TestCase
 {
+    private LayoutGraph $lastLayoutGraph;
+
     #[Test]
     public function implementsElementRenderer(): void
     {
@@ -158,8 +160,6 @@ final class GroupRendererTest extends TestCase
 
         self::assertSame('  ╔══╪═══╪ AB ═╗', $topLine);
     }
-
-    private LayoutGraph $lastLayoutGraph;
 
     private function canvasWithGroup(string $memberTitle, string $label, int $row, int $column): Canvas
     {

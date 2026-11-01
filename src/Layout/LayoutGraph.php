@@ -95,19 +95,6 @@ final class LayoutGraph
         return $layoutGraph;
     }
 
-    /** @return array<string, int> endpoint pair (keyed by a NUL-joined "source\0target") mapped to how many edges share it */
-    private static function countEndpointPairs(Graph $graph): array
-    {
-        $pairCount = [];
-        foreach ($graph->edges() as $edge) {
-            /** @infection-ignore-all the NUL separator only has to make the (source, target) pair key unique; node ids cannot contain it, so mutating it leaves the counts unchanged for any real id */
-            $pair = $edge->sourceId."\0".$edge->targetId;
-            $pairCount[$pair] = ($pairCount[$pair] ?? 0) + 1;
-        }
-
-        return $pairCount;
-    }
-
     /** @return list<Group> */
     public function groups(): array
     {
@@ -312,23 +299,6 @@ final class LayoutGraph
         $this->rebuildEdgeIndexes();
     }
 
-    private function rebuildEdgeIndexes(): void
-    {
-        $this->successorMap = [];
-        $this->predecessorMap = [];
-        $this->outgoingEdgesByNodeId = [];
-        $this->incomingEdgesByNodeId = [];
-
-        foreach ($this->edges as $edge) {
-            $sourceId = $edge->sourceId();
-            $targetId = $edge->targetId();
-            $this->successorMap[$sourceId][] = $targetId;
-            $this->predecessorMap[$targetId][] = $sourceId;
-            $this->outgoingEdgesByNodeId[$sourceId][] = $edge;
-            $this->incomingEdgesByNodeId[$targetId][] = $edge;
-        }
-    }
-
     /** @param list<string> $nodeIds */
     public function removeNodes(array $nodeIds): void
     {
@@ -349,5 +319,35 @@ final class LayoutGraph
             static fn (LayoutEdge $edge): bool => !isset($removedNodeIds[$edge->sourceId()]) && !isset($removedNodeIds[$edge->targetId()]),
         ));
         $this->rebuildEdgeIndexes();
+    }
+
+    /** @return array<string, int> endpoint pair (keyed by a NUL-joined "source\0target") mapped to how many edges share it */
+    private static function countEndpointPairs(Graph $graph): array
+    {
+        $pairCount = [];
+        foreach ($graph->edges() as $edge) {
+            /** @infection-ignore-all the NUL separator only has to make the (source, target) pair key unique; node ids cannot contain it, so mutating it leaves the counts unchanged for any real id */
+            $pair = $edge->sourceId."\0".$edge->targetId;
+            $pairCount[$pair] = ($pairCount[$pair] ?? 0) + 1;
+        }
+
+        return $pairCount;
+    }
+
+    private function rebuildEdgeIndexes(): void
+    {
+        $this->successorMap = [];
+        $this->predecessorMap = [];
+        $this->outgoingEdgesByNodeId = [];
+        $this->incomingEdgesByNodeId = [];
+
+        foreach ($this->edges as $edge) {
+            $sourceId = $edge->sourceId();
+            $targetId = $edge->targetId();
+            $this->successorMap[$sourceId][] = $targetId;
+            $this->predecessorMap[$targetId][] = $sourceId;
+            $this->outgoingEdgesByNodeId[$sourceId][] = $edge;
+            $this->incomingEdgesByNodeId[$targetId][] = $edge;
+        }
     }
 }

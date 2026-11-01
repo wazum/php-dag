@@ -455,6 +455,35 @@ final class ChainAwareRoutingTest extends TestCase
         $this->assertCorridorLaneIsExclusive(labeledFirst: false);
     }
 
+    #[Test]
+    public function liftsTheFanOutBendWhenTheGapHasADivergingWindow(): void
+    {
+        $graph = new Graph();
+        foreach (['S', 'L', 'M', 'R'] as $id) {
+            $graph->addNode(new Node($id, $id));
+        }
+        $graph->addEdge(new Edge('S', 'L'));
+        $graph->addEdge(new Edge('S', 'M', label: new Label('inner-lbl')));
+        $graph->addEdge(new Edge('S', 'R'));
+
+        $layoutGraph = LayoutGraph::fromGraph($graph);
+        foreach ((new LongestPathLayering())->assign($layoutGraph) as $id => $layer) {
+            $layoutGraph->getLayoutNode($id)->layer = $layer;
+        }
+        $layoutGraph->buildLayerIndex();
+        (new DummyNodeInserter())->process($layoutGraph);
+        (new BrandesKopfPositioning(verticalSpacing: 6))->position($layoutGraph);
+        (new LabelReserver())->process($layoutGraph);
+        (new ChainAwareRouting())->route($layoutGraph);
+
+        $entryRow = $layoutGraph->getLayoutNode('L')->row - 1;
+        foreach ($layoutGraph->edges() as $edge) {
+            if ('L' === $edge->targetId()) {
+                self::assertSame($entryRow - 2, $edge->waypoints[0]->row, 'The bend lifts one row above the default entryRow - 1');
+            }
+        }
+    }
+
     private function assertCorridorLaneIsExclusive(bool $labeledFirst): void
     {
         $graph = new Graph();
@@ -520,35 +549,6 @@ final class ChainAwareRoutingTest extends TestCase
                     $fromRow <= $corridorTo && $toRow >= $corridorFrom,
                     'No other lane may overlap the corridor lane over the same rows',
                 );
-            }
-        }
-    }
-
-    #[Test]
-    public function liftsTheFanOutBendWhenTheGapHasADivergingWindow(): void
-    {
-        $graph = new Graph();
-        foreach (['S', 'L', 'M', 'R'] as $id) {
-            $graph->addNode(new Node($id, $id));
-        }
-        $graph->addEdge(new Edge('S', 'L'));
-        $graph->addEdge(new Edge('S', 'M', label: new Label('inner-lbl')));
-        $graph->addEdge(new Edge('S', 'R'));
-
-        $layoutGraph = LayoutGraph::fromGraph($graph);
-        foreach ((new LongestPathLayering())->assign($layoutGraph) as $id => $layer) {
-            $layoutGraph->getLayoutNode($id)->layer = $layer;
-        }
-        $layoutGraph->buildLayerIndex();
-        (new DummyNodeInserter())->process($layoutGraph);
-        (new BrandesKopfPositioning(verticalSpacing: 6))->position($layoutGraph);
-        (new LabelReserver())->process($layoutGraph);
-        (new ChainAwareRouting())->route($layoutGraph);
-
-        $entryRow = $layoutGraph->getLayoutNode('L')->row - 1;
-        foreach ($layoutGraph->edges() as $edge) {
-            if ('L' === $edge->targetId()) {
-                self::assertSame($entryRow - 2, $edge->waypoints[0]->row, 'The bend lifts one row above the default entryRow - 1');
             }
         }
     }

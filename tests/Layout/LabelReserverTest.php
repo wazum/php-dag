@@ -411,24 +411,6 @@ final class LabelReserverTest extends TestCase
         self::assertSame(41, $right->column, 'R must still make room for the inner label after the corridor-backed edge is skipped');
     }
 
-    private function placedNode(LayoutGraph $graph, string $id, int $layer, int $column, int $row = 0): RealLayoutNode
-    {
-        $node = new RealLayoutNode($id, new Node($id, 'N'));
-        $node->layer = $layer;
-        $node->row = $row;
-        $node->column = $column;
-        $graph->addNode($node);
-
-        return $node;
-    }
-
-    private function connectLabeled(LayoutGraph $graph, string $sourceId, string $targetId, ?string $labelText): void
-    {
-        $edge = new Edge($sourceId, $targetId, label: null === $labelText ? null : new Label($labelText));
-        $graph->addEdge(new LayoutEdge(edge: $edge));
-        $graph->storeOriginalEdge($edge);
-    }
-
     #[Test]
     public function movesRightSiblingsAndTheirParentsToMakeRoomForAnInnerLabel(): void
     {
@@ -912,6 +894,24 @@ final class LabelReserverTest extends TestCase
         self::assertSame(0, $graph->divergingLift('S1'));
         self::assertSame(1, $graph->divergingLift('S2'));
         self::assertSame(2, $graph->divergingLift('S3'), 'The third fan-out in the gap must lift two full rows, not one');
+    }
+
+    private function placedNode(LayoutGraph $graph, string $id, int $layer, int $column, int $row = 0): RealLayoutNode
+    {
+        $node = new RealLayoutNode($id, new Node($id, 'N'));
+        $node->layer = $layer;
+        $node->row = $row;
+        $node->column = $column;
+        $graph->addNode($node);
+
+        return $node;
+    }
+
+    private function connectLabeled(LayoutGraph $graph, string $sourceId, string $targetId, ?string $labelText): void
+    {
+        $edge = new Edge($sourceId, $targetId, label: null === $labelText ? null : new Label($labelText));
+        $graph->addEdge(new LayoutEdge(edge: $edge));
+        $graph->storeOriginalEdge($edge);
     }
 
     /**

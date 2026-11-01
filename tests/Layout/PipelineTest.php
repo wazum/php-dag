@@ -195,6 +195,32 @@ final class PipelineTest extends TestCase
         $pipeline->insertBefore(CycleBreaker::class, $this->recordingProcessor('inserted'));
     }
 
+    #[Test]
+    public function executesProcessorsInOrder(): void
+    {
+        $graph = new Graph();
+        $graph->addNode(new Node('A', 'Alpha'));
+        $layoutGraph = LayoutGraph::fromGraph($graph);
+
+        $pipeline = new Pipeline();
+        $pipeline->add(new class implements Processor {
+            public function process(LayoutGraph $graph): void
+            {
+                $graph->getLayoutNode('A')->layer = 5;
+            }
+        });
+        $pipeline->add(new class implements Processor {
+            public function process(LayoutGraph $graph): void
+            {
+                $graph->getLayoutNode('A')->layer = $graph->getLayoutNode('A')->layer * 2;
+            }
+        });
+
+        $pipeline->execute($layoutGraph);
+
+        self::assertSame(10, $layoutGraph->getLayoutNode('A')->layer);
+    }
+
     private function recordingProcessor(string $label): Processor
     {
         return new class($this->executionOrder, $label) implements Processor {
@@ -233,31 +259,5 @@ final class PipelineTest extends TestCase
     private function emptyLayoutGraph(): LayoutGraph
     {
         return LayoutGraph::fromGraph(new Graph());
-    }
-
-    #[Test]
-    public function executesProcessorsInOrder(): void
-    {
-        $graph = new Graph();
-        $graph->addNode(new Node('A', 'Alpha'));
-        $layoutGraph = LayoutGraph::fromGraph($graph);
-
-        $pipeline = new Pipeline();
-        $pipeline->add(new class implements Processor {
-            public function process(LayoutGraph $graph): void
-            {
-                $graph->getLayoutNode('A')->layer = 5;
-            }
-        });
-        $pipeline->add(new class implements Processor {
-            public function process(LayoutGraph $graph): void
-            {
-                $graph->getLayoutNode('A')->layer = $graph->getLayoutNode('A')->layer * 2;
-            }
-        });
-
-        $pipeline->execute($layoutGraph);
-
-        self::assertSame(10, $layoutGraph->getLayoutNode('A')->layer);
     }
 }

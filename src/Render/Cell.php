@@ -55,6 +55,37 @@ final class Cell
         }
     }
 
+    public function putCharacter(string $character, int $zIndex, ?AnsiColor $color = null): void
+    {
+        if ($zIndex >= $this->zIndex) {
+            $this->character = $character;
+            /** @infection-ignore-all Resetting to 0/null behaves identically: resolvedCharacter checks for no edges */
+            $this->combinedBits = 0;
+            $this->strokeStyle = null;
+            $this->zIndex = $zIndex;
+            $this->color = $color;
+        }
+    }
+
+    public function resolvedCharacter(): string
+    {
+        if (null === $this->strokeStyle) {
+            return $this->character;
+        }
+
+        return $this->strokeStyle->glyphs($this->unicodeGlyphs)->junctionFor($this->combinedBits);
+    }
+
+    public function wouldAcceptWrite(int $zIndex): bool
+    {
+        return $zIndex >= $this->zIndex;
+    }
+
+    public function resolvedColor(): ?AnsiColor
+    {
+        return null === $this->strokeStyle ? $this->color : $this->edgeColor;
+    }
+
     private function foldStroke(int $edgeId, EdgeStrokeStyle $strokeStyle, ?AnsiColor $color): void
     {
         if (null === $this->strokeStyle || $strokeStyle->priority() > $this->strokeStyle->priority()) {
@@ -88,36 +119,5 @@ final class Cell
         if ($edgeId === $this->strokeEdgeId) {
             $this->edgeColor = $color ?? $this->edgeColor;
         }
-    }
-
-    public function putCharacter(string $character, int $zIndex, ?AnsiColor $color = null): void
-    {
-        if ($zIndex >= $this->zIndex) {
-            $this->character = $character;
-            /** @infection-ignore-all Resetting to 0/null behaves identically: resolvedCharacter checks for no edges */
-            $this->combinedBits = 0;
-            $this->strokeStyle = null;
-            $this->zIndex = $zIndex;
-            $this->color = $color;
-        }
-    }
-
-    public function resolvedCharacter(): string
-    {
-        if (null === $this->strokeStyle) {
-            return $this->character;
-        }
-
-        return $this->strokeStyle->glyphs($this->unicodeGlyphs)->junctionFor($this->combinedBits);
-    }
-
-    public function wouldAcceptWrite(int $zIndex): bool
-    {
-        return $zIndex >= $this->zIndex;
-    }
-
-    public function resolvedColor(): ?AnsiColor
-    {
-        return null === $this->strokeStyle ? $this->color : $this->edgeColor;
     }
 }

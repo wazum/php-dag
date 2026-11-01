@@ -124,30 +124,6 @@ final class LeftToRightPositioningTest extends TestCase
         self::assertSame($nodeA->boxWidth() + 4, $nodeB->column);
     }
 
-    /**
-     * @param list<Node> $nodes
-     * @param list<Edge> $edges
-     */
-    private function buildLayeredGraph(array $nodes, array $edges = []): LayoutGraph
-    {
-        $graph = new Graph();
-        foreach ($nodes as $node) {
-            $graph->addNode($node);
-        }
-        foreach ($edges as $edge) {
-            $graph->addEdge($edge);
-        }
-
-        $layoutGraph = LayoutGraph::fromGraph($graph);
-        $layers = (new LongestPathLayering())->assign($layoutGraph);
-        foreach ($layers as $nodeId => $layer) {
-            $layoutGraph->getLayoutNode($nodeId)->layer = $layer;
-        }
-        $layoutGraph->buildLayerIndex();
-
-        return $layoutGraph;
-    }
-
     #[Test]
     public function centersShorterLayerAgainstTheTallest(): void
     {
@@ -183,5 +159,29 @@ final class LeftToRightPositioningTest extends TestCase
 
         self::assertGreaterThan(0, $nodeB->row, 'The shorter layer starts below the top because it is centered');
         self::assertSame($nodeB->row + $nodeB->boxHeight() + 2, $nodeC->row, 'Stacking must accumulate from the layer start, not reset');
+    }
+
+    /**
+     * @param list<Node> $nodes
+     * @param list<Edge> $edges
+     */
+    private function buildLayeredGraph(array $nodes, array $edges = []): LayoutGraph
+    {
+        $graph = new Graph();
+        foreach ($nodes as $node) {
+            $graph->addNode($node);
+        }
+        foreach ($edges as $edge) {
+            $graph->addEdge($edge);
+        }
+
+        $layoutGraph = LayoutGraph::fromGraph($graph);
+        $layers = (new LongestPathLayering())->assign($layoutGraph);
+        foreach ($layers as $nodeId => $layer) {
+            $layoutGraph->getLayoutNode($nodeId)->layer = $layer;
+        }
+        $layoutGraph->buildLayerIndex();
+
+        return $layoutGraph;
     }
 }

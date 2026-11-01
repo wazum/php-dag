@@ -65,6 +65,18 @@ final readonly class LayoutResult
         }
     }
 
+    /** Visible width of the diagram in terminal columns. */
+    public function width(): int
+    {
+        return $this->width;
+    }
+
+    /** Visible height of the diagram in rows. */
+    public function height(): int
+    {
+        return $this->height;
+    }
+
     /** @param resource $stream */
     private function writeAll($stream, string $content): void
     {
@@ -76,17 +88,5 @@ final readonly class LayoutResult
             }
             $remainingContent = substr($remainingContent, $bytesWritten);
         }
-    }
-
-    /** Visible width of the diagram in terminal columns. */
-    public function width(): int
-    {
-        return $this->width;
-    }
-
-    /** Visible height of the diagram in rows. */
-    public function height(): int
-    {
-        return $this->height;
     }
 }
