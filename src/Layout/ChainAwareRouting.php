@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace PhpDag\Layout;
 
 use PhpDag\Render\Waypoint;
-use SplObjectStorage;
 
 final readonly class ChainAwareRouting implements EdgeRouting
 {
@@ -23,8 +22,7 @@ final readonly class ChainAwareRouting implements EdgeRouting
             fn (array $left, array $right): int => (null === $this->corridorLaneColumn($graph, $left[2])) <=> (null === $this->corridorLaneColumn($graph, $right[2])),
         );
 
-        /** @var SplObjectStorage<LayoutEdge, true> */
-        $routedEdges = new SplObjectStorage();
+        $routedEdgeIds = [];
 
         /** @var array<string, int> */
         $preferredColumns = [];
@@ -41,7 +39,8 @@ final readonly class ChainAwareRouting implements EdgeRouting
         foreach ($chains as [$chainSourceId, $chainTargetId, $chainEdges]) {
             $this->routeChain($graph, $chainSourceId, $chainTargetId, $chainEdges, $layerMaxHeights, $groupEntryCeilings, $preferredColumns, $laneColumns, $targetLanes, $sourceLanes);
             foreach ($chainEdges as $chainEdge) {
-                $routedEdges->attach($chainEdge);
+                /** @infection-ignore-all only probed with isset(), so the stored value is never read */
+                $routedEdgeIds[spl_object_id($chainEdge)] = true;
             }
         }
 
@@ -50,7 +49,7 @@ final readonly class ChainAwareRouting implements EdgeRouting
         /** @var array<string, list<LayoutEdge>> $directGroups */
         $directGroups = [];
         foreach ($graph->edges() as $edge) {
-            if ($routedEdges->contains($edge)) {
+            if (isset($routedEdgeIds[spl_object_id($edge)])) {
                 /** @infection-ignore-all break would stop after first non-chain edge; tests have chain edges followed by direct edges */
                 continue;
             }
