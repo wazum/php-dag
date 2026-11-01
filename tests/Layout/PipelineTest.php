@@ -28,6 +28,14 @@ final class PipelineTest extends TestCase
     }
 
     #[Test]
+    public function addReturnsThePipelineForChaining(): void
+    {
+        $pipeline = new Pipeline();
+
+        self::assertSame($pipeline, $pipeline->add(new CycleBreaker()));
+    }
+
+    #[Test]
     public function containsReportsWhetherAProcessorClassIsPresent(): void
     {
         $pipeline = new Pipeline();

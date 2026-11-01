@@ -11,9 +11,11 @@ final class Pipeline
     /** @var list<Processor> */
     private array $processors = [];
 
-    public function add(Processor $processor): void
+    public function add(Processor $processor): self
     {
         $this->processors[] = $processor;
+
+        return $this;
     }
 
     /** @param class-string<Processor> $processorClass */
