@@ -20,12 +20,12 @@ final readonly class ParallelPortReserver implements Processor
 
     public function process(LayoutGraph $graph): void
     {
-        foreach (EdgePorts::portCounts($graph) as $nodeId => $ports) {
+        foreach (EdgePorts::requiredExtents($graph, $this->flowDirection) as $nodeId => $extent) {
             $node = $graph->getLayoutNode(strval($nodeId));
             if (FlowDirection::LeftToRight === $this->flowDirection) {
-                $node->minBoxHeight = 2 * $ports + 1;
+                $node->minBoxHeight = $extent;
             } elseif ($node instanceof RealLayoutNode) {
-                $node->minBoxWidth = 2 * $ports + 1;
+                $node->minBoxWidth = $extent;
             }
         }
     }

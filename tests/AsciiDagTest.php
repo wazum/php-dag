@@ -180,6 +180,36 @@ final class AsciiDagTest extends TestCase
     }
 
     #[Test]
+    public function linesUpAParallelPairStraightInBothFlowDirections(): void
+    {
+        $graph = Graph::fromDot('digraph { a -> b; a -> b; a -> c }');
+
+        self::assertSame(<<<'EXPECTED'
+            ╭─────╮
+            │  a  │
+            ╰┬─┬─┬╯
+             │ │ │
+             │ │ └───┐
+             ▼ ▼     ▼
+            ╭┴─┴╮  ╭─┴─╮
+            │ b │  │ c │
+            ╰───╯  ╰───╯
+            EXPECTED, AsciiDag::default()->render($graph));
+        self::assertSame(<<<'EXPECTED'
+            ╭───╮   ╭───╮
+            │   ├──▶┤   │
+            │   │   │ b │
+            │ a ├──▶┤   │
+            │   │   ╰───╯
+            │   ├─┐
+            ╰───╯ │
+                  │ ╭───╮
+                  └▶┤ c │
+                    ╰───╯
+            EXPECTED, AsciiDag::builder()->leftToRight()->build()->render($graph));
+    }
+
+    #[Test]
     public function rendersParallelEdgesAsSeparateLanes(): void
     {
         $graph = new Graph();
@@ -365,10 +395,8 @@ final class AsciiDagTest extends TestCase
     }
 
     #[Test]
-    public function topToBottomParallelEdgeLabelsSitOnTheSideOfTheirLane(): void
+    public function topToBottomParallelEdgeLabelsSitOnTheirOwnLane(): void
     {
-        // Each parallel lane's label splays out to the side the lane is on: the
-        // left lane's label to the left of the box, the right lane's to the right.
         $graph = new Graph();
         $graph->addNode(new Node('A', 'A'));
         $graph->addNode(new Node('B', 'B'));
@@ -378,25 +406,23 @@ final class AsciiDagTest extends TestCase
         $result = AsciiDag::default()->render($graph);
 
         $expected = <<<'EXPECTED'
-           ╭───╮
-           │ A │
-           ╰┬─┬╯
-            │ │
-        yes │ │ no
-            ▼ ▼
-           ╭┴─┴╮
-           │ B │
-           ╰───╯
+        ╭───────╮
+        │   A   │
+        ╰┬─────┬╯
+         │     │
+        yes   no
+         ▼     ▼
+        ╭┴─────┴╮
+        │   B   │
+        ╰───────╯
         EXPECTED;
 
-        self::assertSame($expected, $result, sprintf("Parallel-edge labels must splay to the side of their lane:\n%s", $result));
+        self::assertSame($expected, $result, sprintf("Parallel-edge labels must sit on their own lane:\n%s", $result));
     }
 
     #[Test]
-    public function leftToRightParallelEdgeLabelsSitAboveAndBelowTheirLane(): void
+    public function leftToRightParallelEdgeLabelsSitOnTheirOwnLane(): void
     {
-        // The top lane's label goes above the boxes, the bottom lane's below —
-        // each on the side its horizontal lane sits.
         $graph = new Graph();
         $graph->addNode(new Node('A', 'A'));
         $graph->addNode(new Node('B', 'B'));
@@ -406,20 +432,18 @@ final class AsciiDagTest extends TestCase
         $result = AsciiDag::builder()->leftToRight()->build()->render($graph);
 
         $expected = <<<'EXPECTED'
-             yes
-        ╭───╮   ╭───╮
-        │   ├──▶┤   │
-        │ A │   │ B │
-        │   ├──▶┤   │
-        ╰───╯   ╰───╯
-             no
+        ╭───╮      ╭───╮
+        │   ├─yes─▶┤   │
+        │ A │      │ B │
+        │   ├─no──▶┤   │
+        ╰───╯      ╰───╯
         EXPECTED;
 
-        self::assertSame($expected, $result, sprintf("Left-to-right parallel-edge labels must sit above/below their lane:\n%s", $result));
+        self::assertSame($expected, $result, sprintf("Left-to-right parallel-edge labels must sit on their own lane:\n%s", $result));
     }
 
     #[Test]
-    public function leftToRightLabelsTwoParallelGroupsAboveAndBelow(): void
+    public function leftToRightLabelsTwoParallelGroupsOnTheirOwnLanes(): void
     {
         $graph = new Graph();
         $graph->addNode(new Node('A', 'A'));
@@ -433,13 +457,11 @@ final class AsciiDagTest extends TestCase
         $result = AsciiDag::builder()->leftToRight()->build()->render($graph);
 
         $expected = <<<'EXPECTED'
-             p       r
-        ╭───╮   ╭───╮   ╭───╮
-        │   ├──▶┤   ├──▶┤   │
-        │ A │   │ B │   │ C │
-        │   ├──▶┤   ├──▶┤   │
-        ╰───╯   ╰───╯   ╰───╯
-             q       s
+        ╭───╮    ╭───╮    ╭───╮
+        │   ├─p─▶┤   ├─r─▶┤   │
+        │ A │    │ B │    │ C │
+        │   ├─q─▶┤   ├─s─▶┤   │
+        ╰───╯    ╰───╯    ╰───╯
         EXPECTED;
 
         self::assertSame($expected, $result, sprintf("Each parallel group's labels must sit on its own lanes:\n%s", $result));

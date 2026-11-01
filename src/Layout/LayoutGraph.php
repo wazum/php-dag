@@ -61,6 +61,29 @@ final class LayoutGraph
         return $this->originalEdges;
     }
 
+    /**
+     * Labelled original edges outside parallel groups; a parallel edge carries
+     * its label on its own lane, in room reserved by its port spacing.
+     *
+     * @return list<Edge>
+     */
+    public function singleLabelledEdges(): array
+    {
+        $pairCounts = [];
+        foreach ($this->originalEdges as $edge) {
+            $pairCounts[$edge->sourceId][$edge->targetId] = ($pairCounts[$edge->sourceId][$edge->targetId] ?? 0) + 1;
+        }
+
+        $edges = [];
+        foreach ($this->originalEdges as $edge) {
+            if (null !== $edge->label && 1 === $pairCounts[$edge->sourceId][$edge->targetId]) {
+                $edges[] = $edge;
+            }
+        }
+
+        return $edges;
+    }
+
     public static function fromGraph(Graph $graph): self
     {
         $layoutGraph = new self();

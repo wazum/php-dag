@@ -26,7 +26,7 @@ final readonly class LeftToRightLabelReserver implements Processor
     {
         $gapShifts = [];
 
-        foreach ($graph->originalEdges() as $edge) {
+        foreach ($graph->singleLabelledEdges() as $edge) {
             if (null === $edge->label) {
                 continue;
             }
@@ -77,7 +77,7 @@ final readonly class LeftToRightLabelReserver implements Processor
     {
         $minTopRow = 0;
 
-        foreach ($graph->originalEdges() as $edge) {
+        foreach ($graph->singleLabelledEdges() as $edge) {
             if (null === $edge->label) {
                 continue;
             }

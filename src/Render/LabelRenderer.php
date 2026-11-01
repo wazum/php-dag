@@ -24,23 +24,13 @@ final readonly class LabelRenderer implements ElementRenderer
         $this->renderSelfLoopLabels($canvas, $graph);
 
         $parallelGroupSizes = $this->parallelGroupSizes($graph);
-        $isLeftToRight = FlowDirection::LeftToRight === $this->flowDirection;
-        if ($isLeftToRight) {
-            $this->renderLeftToRightParallelLabels($canvas, $graph, $parallelGroupSizes);
-        }
+        $this->renderParallelLabels($canvas, $graph, $parallelGroupSizes);
 
         $boxes = $this->boxRectangles($graph);
         $sourcesByTarget = $this->forwardSourcesByTarget($graph);
 
         foreach ($graph->edges() as $layoutEdge) {
-            if (null === $layoutEdge->edge->label || [] === $layoutEdge->waypoints) {
-                continue;
-            }
-
-            // Left-to-right parallel-edge labels are placed above/below their
-            // lane by the dedicated pass above; skip them here.
-            /** @infection-ignore-all the ?? 0 fallback only fires for a reversed edge (excluded from the sizes), but the !reversed guard already sends those down the generic path, so the fallback value is never observable */
-            if ($isLeftToRight && !$layoutEdge->reversed && ($parallelGroupSizes[$this->parallelKey($layoutEdge)] ?? 0) > 1) {
+            if (null === $layoutEdge->edge->label || [] === $layoutEdge->waypoints || $this->isParallel($layoutEdge, $parallelGroupSizes)) {
                 continue;
             }
 
@@ -393,26 +383,36 @@ final readonly class LabelRenderer implements ElementRenderer
      *
      * @param array<string, int> $groupSizes
      */
-    private function renderLeftToRightParallelLabels(Canvas $canvas, LayoutGraph $graph, array $groupSizes): void
+    /**
+     * Each parallel edge carries its label on its own lane just past the
+     * source box: across the lane in top-to-bottom flow, along it in
+     * left-to-right flow. The layout spaces the lanes and reserves the room.
+     *
+     * @param array<string, int> $groupSizes
+     */
+    private function renderParallelLabels(Canvas $canvas, LayoutGraph $graph, array $groupSizes): void
     {
         foreach ($graph->edges() as $edge) {
-            /** @infection-ignore-all the ?? 0 fallback only fires for a reversed edge (excluded from groupSizes), but a reversed edge is already rejected by the first condition, so the fallback value is never observable */
-            if ($edge->reversed
-                || null === $edge->edge->label
-                || [] === $edge->waypoints
-                || ($groupSizes[$this->parallelKey($edge)] ?? 0) <= 1) {
+            $label = $edge->edge->label;
+            if (null === $label || [] === $edge->waypoints || !$this->isParallel($edge, $groupSizes)) {
                 continue;
             }
 
             $source = $graph->getLayoutNode($edge->sourceId());
-            /** @infection-ignore-all a straight horizontal lane's waypoints all share one row, so any waypoint index yields the same lane row */
-            $laneRow = $edge->waypoints[0]->row;
-            $centreRow = $source->row + intdiv($source->boxHeight(), 2);
-            /** @infection-ignore-all the < vs <= boundary only differs for a lane sitting exactly on the centre row, which happens only for the odd middle lane of a 3+-way group; two-way groups (the supported case) never place a lane on the centre */
-            $labelRow = $laneRow < $centreRow ? $source->row - 1 : $source->row + $source->boxHeight();
-
-            $canvas->text($labelRow, $edge->waypoints[0]->column, $edge->edge->label->text, self::Z_INDEX, $edge->edge->color);
+            $exit = $edge->waypoints[0];
+            if (FlowDirection::LeftToRight === $this->flowDirection) {
+                $canvas->text($exit->row, $source->column + $source->boxWidth() + 1, $label->text, self::Z_INDEX, $edge->edge->color);
+            } else {
+                $canvas->text($source->row + $source->boxHeight() + 1, $exit->column - intdiv($label->width(), 2), $label->text, self::Z_INDEX, $edge->edge->color);
+            }
         }
+    }
+
+    /** @param array<string, int> $groupSizes */
+    private function isParallel(LayoutEdge $edge, array $groupSizes): bool
+    {
+        /** @infection-ignore-all the ?? 0 fallback only fires for a reversed edge (excluded from the sizes), which the first condition already rejects */
+        return !$edge->reversed && ($groupSizes[$this->parallelKey($edge)] ?? 0) > 1;
     }
 
     /**

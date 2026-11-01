@@ -122,7 +122,7 @@ final readonly class LabelReserver implements Processor
         }
 
         $claimsByGap = [];
-        foreach ($graph->originalEdges() as $edge) {
+        foreach ($graph->singleLabelledEdges() as $edge) {
             $label = $edge->label;
             if (null === $label || LabelPosition::Middle !== $label->position || count($sourcesByTarget[$edge->targetId]) < 2) {
                 continue;
@@ -173,14 +173,7 @@ final readonly class LabelReserver implements Processor
 
     private function hasLabeledEdges(LayoutGraph $graph): bool
     {
-        foreach ($graph->originalEdges() as $edge) {
-            if (null !== $edge->label) {
-                return true;
-            }
-        }
-
-        /** @infection-ignore-all Returning true here only disables an optimization guard; all steps no-op on label-free graphs */
-        return false;
+        return [] !== $graph->singleLabelledEdges();
     }
 
     /** Must mirror DummyNodeInserter's corridor condition; reversed edges never qualify because their user-source layer sits at or above their user-target's, so the signed span is never > 1. */
@@ -275,7 +268,7 @@ final readonly class LabelReserver implements Processor
         /** @var array<int, non-empty-array<string, array{from: int, to: int, barFrom: int, barTo: int, firstColumn: int}>> $spansByGap */
         $spansByGap = [];
         $windowRowsBySource = [];
-        foreach ($graph->originalEdges() as $edge) {
+        foreach ($graph->singleLabelledEdges() as $edge) {
             if (null === $edge->label) {
                 continue;
             }
@@ -326,7 +319,7 @@ final readonly class LabelReserver implements Processor
         $gapShifts = $divergingRows;
         $targetInDegrees = $this->targetInDegrees($graph);
 
-        foreach ($graph->originalEdges() as $edge) {
+        foreach ($graph->singleLabelledEdges() as $edge) {
             if (null === $edge->label) {
                 continue;
             }
@@ -371,7 +364,7 @@ final readonly class LabelReserver implements Processor
     {
         $minLeftColumn = 0;
 
-        foreach ($graph->originalEdges() as $edge) {
+        foreach ($graph->singleLabelledEdges() as $edge) {
             if (null === $edge->label) {
                 continue;
             }
@@ -403,7 +396,7 @@ final readonly class LabelReserver implements Processor
 
     private function reserveHorizontalSpace(LayoutGraph $graph): void
     {
-        foreach ($graph->originalEdges() as $edge) {
+        foreach ($graph->singleLabelledEdges() as $edge) {
             if (null === $edge->label) {
                 continue;
             }

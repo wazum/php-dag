@@ -27,6 +27,7 @@ use PhpDag\Layout\LeftToRightPositioning;
 use PhpDag\Layout\LeftToRightRouting;
 use PhpDag\Layout\NodePositioner;
 use PhpDag\Layout\ParallelBendLaneReserver;
+use PhpDag\Layout\ParallelPortAligner;
 use PhpDag\Layout\ParallelPortReserver;
 use PhpDag\Layout\Pipeline;
 use PhpDag\Layout\SelfLoopRouter;
@@ -201,6 +202,7 @@ final class AsciiDagBuilder
         // After the cluster ring is reserved, reclaim the excess so the border
         // replaces the rank gap rather than stacking on top of it.
         $pipeline->add(new VerticalCompactor($this->rankSpacing));
+        $pipeline->add(new ParallelPortAligner(FlowDirection::TopToBottom, $this->nodeSpacing));
         $pipeline->add(new LabelReserver());
         $pipeline->add(new ParallelBendLaneReserver(FlowDirection::TopToBottom));
         $pipeline->add(new EdgeRouter());
@@ -218,6 +220,7 @@ final class AsciiDagBuilder
         $pipeline->add(new ClusterMemberCentering(FlowDirection::LeftToRight));
         $pipeline->add(new GroupSpacer(FlowDirection::LeftToRight));
         $pipeline->add(new HorizontalCompactor($this->rankSpacing));
+        $pipeline->add(new ParallelPortAligner(FlowDirection::LeftToRight, $this->nodeSpacing));
         $pipeline->add(new LeftToRightLabelReserver());
         $pipeline->add(new ParallelBendLaneReserver(FlowDirection::LeftToRight));
         $pipeline->add(new EdgeRouter(new LeftToRightRouting()));

@@ -17,12 +17,13 @@ namespace PhpDag\Layout;
 final readonly class EdgePorts
 {
     /**
-     * @param array<int, int>    $exitPositions       keyed by spl_object_id of the edge
-     * @param array<int, int>    $entryPositions      keyed by spl_object_id of the edge
-     * @param array<int, int>    $bendDepths          lanes back from the bend nearest the target, keyed by spl_object_id of the edge
-     * @param array<string, int> $trunkExitPositions  keyed by node id
-     * @param array<string, int> $trunkEntryPositions keyed by node id
-     * @param array<int, int>    $extraLanesByGap     keyed by the layer before the gap
+     * @param array<int, int>                          $exitPositions       keyed by spl_object_id of the edge
+     * @param array<int, int>                          $entryPositions      keyed by spl_object_id of the edge
+     * @param array<int, int>                          $bendDepths          lanes back from the bend nearest the target, keyed by spl_object_id of the edge
+     * @param array<string, int>                       $trunkExitPositions  keyed by node id
+     * @param array<string, int>                       $trunkEntryPositions keyed by node id
+     * @param array<int, int>                          $extraLanesByGap     keyed by the layer before the gap
+     * @param list<array{LayoutNode, LayoutNode, int}> $misalignedGroups    source, target and the offset that would make every lane of the group straight
      */
     private function __construct(
         public array $exitPositions,
@@ -31,24 +32,33 @@ final readonly class EdgePorts
         public array $trunkExitPositions,
         public array $trunkEntryPositions,
         public array $extraLanesByGap,
+        public array $misalignedGroups,
     ) {
     }
 
     /**
-     * Ports needed on the busiest side of every box: one per parallel edge plus
-     * one shared trunk for its other edges, or none without a parallel edge.
+     * The box extent (width in top-to-bottom flow, height in left-to-right flow)
+     * every box needs so its busiest side hosts one port per parallel edge plus
+     * one shared trunk for its other edges; zero without a parallel edge.
      *
      * @return array<string, int>
      */
-    public static function portCounts(LayoutGraph $graph): array
+    public static function requiredExtents(LayoutGraph $graph, FlowDirection $flowDirection): array
     {
+        $alongRows = FlowDirection::LeftToRight === $flowDirection;
         [$exitSides, $entrySides] = self::sides(self::pairs($graph));
-        $portCounts = [];
+        $extents = [];
         foreach ([...array_keys($exitSides), ...array_keys($entrySides)] as $nodeId) {
-            $portCounts[strval($nodeId)] = max(self::portCount($exitSides[$nodeId] ?? []), self::portCount($entrySides[$nodeId] ?? []));
+            $sideExtents = array_filter(
+                [self::sideExtent($exitSides[$nodeId] ?? [], $alongRows), self::sideExtent($entrySides[$nodeId] ?? [], $alongRows)],
+                static fn (?int $extent): bool => null !== $extent,
+            );
+            if ([] !== $sideExtents) {
+                $extents[strval($nodeId)] = max($sideExtents);
+            }
         }
 
-        return $portCounts;
+        return $extents;
     }
 
     public static function of(LayoutGraph $graph, FlowDirection $flowDirection): self
@@ -71,6 +81,7 @@ final readonly class EdgePorts
 
         $bendDepths = [];
         $extraLanesByGap = [];
+        $misalignedGroups = [];
         foreach ($pairs as [$source, $target, $edges, $alone]) {
             if (count($edges) < 2) {
                 continue;
@@ -80,18 +91,24 @@ final readonly class EdgePorts
                     $exitPositions[spl_object_id($edge)] = $entryPositions[spl_object_id($edge)] = self::straightLanePosition($source, $target, $index, count($edges), $alongRows);
                 }
             }
+            $offsets = array_unique(array_map(static fn (LayoutEdge $edge): int => $entryPositions[spl_object_id($edge)] - $exitPositions[spl_object_id($edge)], $edges));
+            if (1 === count($offsets) && 0 !== $offsets[0]) {
+                $misalignedGroups[] = [$source, $target, $offsets[0]];
+            }
             $towardsStart = [];
             $towardsEnd = [];
             $bendPositions = [];
             foreach ($edges as $edge) {
                 $edgeId = spl_object_id($edge);
+                if ($entryPositions[$edgeId] === $exitPositions[$edgeId]) {
+                    continue;
+                }
+                array_push($bendPositions, $exitPositions[$edgeId], $entryPositions[$edgeId]);
+                /** @infection-ignore-all straight lanes were skipped above, so the two positions are never equal here */
                 if ($entryPositions[$edgeId] < $exitPositions[$edgeId]) {
                     $towardsStart[] = $edgeId;
-                } elseif ($entryPositions[$edgeId] > $exitPositions[$edgeId]) {
+                } else {
                     $towardsEnd[] = $edgeId;
-                }
-                if ($entryPositions[$edgeId] !== $exitPositions[$edgeId]) {
-                    array_push($bendPositions, $exitPositions[$edgeId], $entryPositions[$edgeId]);
                 }
             }
             $lift = self::crossesTrunk($bendPositions, $exitTrunkSpans[$source->id] ?? null) || self::crossesTrunk($bendPositions, $entryTrunkSpans[$target->id] ?? null) ? 1 : 0;
@@ -101,10 +118,22 @@ final readonly class EdgePorts
             foreach ($towardsEnd as $rank => $edgeId) {
                 $bendDepths[$edgeId] = $rank + $lift;
             }
-            $extraLanesByGap[$source->layer] = max($extraLanesByGap[$source->layer] ?? 0, count($towardsStart) - 1 + $lift, count($towardsEnd) - 1 + $lift);
+            $labelWidths = self::labelWidths($edges);
+            if ([] === $bendPositions && [] === $labelWidths) {
+                continue;
+            }
+            $labelLanes = match (true) {
+                [] === $labelWidths => 0,
+                $alongRows => max($labelWidths) + 1,
+                default => 1,
+            };
+            $bendLanes = [] === $bendPositions ? 0 : max(count($towardsStart), count($towardsEnd)) + $lift;
+            $neededLanes = $bendLanes + 1 + $labelLanes;
+            $availableLanes = self::flowStart($target, $alongRows) - 1 - self::flowStart($source, $alongRows) - self::flowExtent($source, $alongRows);
+            $extraLanesByGap[$source->layer] = max($extraLanesByGap[$source->layer] ?? 0, $neededLanes - $availableLanes);
         }
 
-        return new self($exitPositions, $entryPositions, $bendDepths, $trunkExitPositions, $trunkEntryPositions, $extraLanesByGap);
+        return new self($exitPositions, $entryPositions, $bendDepths, $trunkExitPositions, $trunkEntryPositions, $extraLanesByGap, $misalignedGroups);
     }
 
     /**
@@ -178,6 +207,58 @@ final readonly class EdgePorts
     }
 
     /**
+     * Ports sit two cells apart; in top-to-bottom flow a side carrying labelled
+     * parallel edges spaces them so each label fits on its own lane with two
+     * blank cells to the next one. The spacing stays even, so the box keeps an
+     * odd width and its content stays centred.
+     *
+     * @param list<array{LayoutNode, LayoutNode, non-empty-list<LayoutEdge>, bool}> $pairs
+     */
+    private static function spacing(array $pairs, bool $alongRows): int
+    {
+        $labelWidths = [];
+        foreach ($pairs as [, , $edges]) {
+            if (count($edges) > 1 && !$alongRows) {
+                array_push($labelWidths, ...self::labelWidths($edges));
+            }
+        }
+        if ([] === $labelWidths) {
+            return 2;
+        }
+
+        $spacing = max($labelWidths) + 2;
+
+        return $spacing + $spacing % 2;
+    }
+
+    /**
+     * @param list<LayoutEdge> $edges
+     *
+     * @return list<int>
+     */
+    private static function labelWidths(array $edges): array
+    {
+        $labelWidths = [];
+        foreach ($edges as $edge) {
+            if (null !== $edge->edge->label) {
+                $labelWidths[] = $edge->edge->label->width();
+            }
+        }
+
+        return $labelWidths;
+    }
+
+    /**
+     * @param list<array{LayoutNode, LayoutNode, non-empty-list<LayoutEdge>, bool}> $pairs
+     */
+    private static function sideExtent(array $pairs, bool $alongRows): ?int
+    {
+        $portCount = self::portCount($pairs);
+
+        return 0 === $portCount ? null : self::spacing($pairs, $alongRows) * ($portCount - 1) + 3;
+    }
+
+    /**
      * @param non-empty-list<array{LayoutNode, LayoutNode, non-empty-list<LayoutEdge>, bool}> $pairs
      * @param 0|1                                                                             $farEnd         index of the far end within each pair
      * @param array<int, int>                                                                 $edgePositions
@@ -205,18 +286,51 @@ final readonly class EdgePorts
         }
         usort($slots, static fn (array $left, array $right): int => $left[0] <=> $right[0]);
 
-        $position = self::start($node, $alongRows) + intdiv(self::extent($node, $alongRows) - (2 * $portCount - 1), 2);
-        foreach ($slots as [, $edges]) {
+        $spacing = self::spacing($pairs, $alongRows);
+        $firstPositions = self::firstPortPositions(
+            $slots,
+            $spacing,
+            self::start($node, $alongRows) + 1,
+            self::start($node, $alongRows) + self::extent($node, $alongRows) - 2,
+        );
+        foreach ($slots as $index => [, $edges]) {
+            $position = $firstPositions[$index];
             if ([] === $edges) {
                 $trunkPositions[$node->id] = $position;
                 $trunkSpans[$node->id] = [min($position, ...$trunkFarCenters), max($position, ...$trunkFarCenters)];
-                $position += 2;
             }
             foreach ($edges as $edge) {
                 $edgePositions[spl_object_id($edge)] = $position;
-                $position += 2;
+                $position += $spacing;
             }
         }
+    }
+
+    /**
+     * Each slot sits centred across from its far end, pushed apart only as far
+     * as the spacing needs and kept inside the box side's inner cells.
+     *
+     * @param list<array{int, list<LayoutEdge>}> $slots far-end centre and the edges of each slot, in order
+     *
+     * @return array<int, int> first port position, keyed by slot index
+     */
+    private static function firstPortPositions(array $slots, int $spacing, int $innerStart, int $innerEnd): array
+    {
+        $spans = array_map(static fn (array $slot): int => (max(1, count($slot[1])) - 1) * $spacing, $slots);
+        $firstPositions = [];
+        $nextFree = $innerStart;
+        foreach ($slots as $index => [$farCenter]) {
+            $firstPositions[$index] = max($farCenter - intdiv($spans[$index], 2), $nextFree);
+            $nextFree = $firstPositions[$index] + $spans[$index] + $spacing;
+        }
+
+        $limit = $innerEnd;
+        for ($index = count($slots) - 1; $index >= 0; --$index) {
+            $firstPositions[$index] = min($firstPositions[$index], $limit - $spans[$index]);
+            $limit = $firstPositions[$index] - $spacing;
+        }
+
+        return $firstPositions;
     }
 
     private static function start(LayoutNode $node, bool $alongRows): int
@@ -227,6 +341,16 @@ final readonly class EdgePorts
     private static function extent(LayoutNode $node, bool $alongRows): int
     {
         return $alongRows ? $node->boxHeight() : $node->boxWidth();
+    }
+
+    private static function flowStart(LayoutNode $node, bool $alongRows): int
+    {
+        return $alongRows ? $node->column : $node->row;
+    }
+
+    private static function flowExtent(LayoutNode $node, bool $alongRows): int
+    {
+        return $alongRows ? $node->boxWidth() : $node->boxHeight();
     }
 
     private static function center(LayoutNode $node, bool $alongRows): int
