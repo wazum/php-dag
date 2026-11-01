@@ -6,6 +6,7 @@ namespace PhpDag\Graph;
 
 use InvalidArgumentException;
 use PhpDag\Style\AnsiColor;
+use PhpDag\Style\BorderStyle;
 
 final readonly class Node
 {
@@ -70,10 +71,12 @@ final readonly class Node
     public function boxWidth(): int
     {
         $badgeWidth = $this->style->badge?->width() ?? 0;
-
-        return $this->contentWidth()
+        $width = $this->contentWidth()
             + 2 * ($this->style->borderStyle->thickness() + self::HORIZONTAL_PADDING)
             + $this->style->borderStyle->badgeExtraWidth($badgeWidth);
+
+        // A badge sits on the top border between the corners, after at least one border cell.
+        return BorderStyle::None === $this->style->borderStyle ? $width : max($width, $badgeWidth + 3);
     }
 
     public function boxHeight(): int

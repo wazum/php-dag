@@ -197,6 +197,23 @@ final class BoxRendererTest extends TestCase
     }
 
     #[Test]
+    public function widensTheBoxForABadgeWiderThanItsContent(): void
+    {
+        $canvas = new Canvas();
+        $node = new Node('E', 'a', style: new NodeStyle(badge: new Badge('漢漢')));
+
+        (new BoxRenderer())->render($canvas, $this->buildLayoutGraph($node));
+
+        $expected = <<<'TEXT'
+        ╭─漢漢╮
+        │ a   │
+        ╰─────╯
+        TEXT;
+
+        self::assertSame($expected, (new PlainTextFormatter())->format($canvas));
+    }
+
+    #[Test]
     public function rendersBorderlessNode(): void
     {
         $canvas = new Canvas();
