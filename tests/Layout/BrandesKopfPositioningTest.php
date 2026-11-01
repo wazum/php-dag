@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace PhpDag\Tests\Layout;
 
+use PhpDag\AsciiDagBuilder;
 use PhpDag\Graph\Edge;
 use PhpDag\Graph\Graph;
 use PhpDag\Graph\Node;
 use PhpDag\Layout\BrandesKopfPositioning;
 use PhpDag\Layout\DummyLayoutNode;
 use PhpDag\Layout\DummyNodeInserter;
+use PhpDag\Layout\LayoutEngine;
 use PhpDag\Layout\LayoutGraph;
 use PhpDag\Layout\LongestPathLayering;
 use PhpDag\Layout\NodePositioning;
@@ -22,6 +24,16 @@ final class BrandesKopfPositioningTest extends TestCase
     public function implementsNodePositioningInterface(): void
     {
         self::assertInstanceOf(NodePositioning::class, new BrandesKopfPositioning());
+    }
+
+    #[Test]
+    public function keepsBoxesOfALayerApartWhenAFeedbackEdgeSkipsThatLayer(): void
+    {
+        $graph = (new LayoutEngine((new AsciiDagBuilder())->defaultPipeline()))
+            ->layout(Graph::fromDot('digraph { r -> b; r -> x; b -> z; z -> r }'));
+
+        [$left, $right] = array_map($graph->getLayoutNode(...), $graph->layerIndex()[1]);
+        self::assertGreaterThanOrEqual(2, $right->column - ($left->column + $left->boxWidth()));
     }
 
     #[Test]

@@ -269,7 +269,11 @@ final readonly class BrandesKopfPositioning implements NodePositioning
     private function alignmentNeighbors(LayoutGraph $graph, string $nodeId, bool $vertical, array $positionByNodeId): array
     {
         $neighbors = $vertical ? $graph->successors($nodeId) : $graph->predecessors($nodeId);
-        $present = array_values(array_filter($neighbors, static fn (string $nodeId): bool => isset($positionByNodeId[$nodeId])));
+        $layer = $graph->getLayoutNode($nodeId)->layer;
+        $present = array_values(array_filter(
+            $neighbors,
+            static fn (string $neighborId): bool => isset($positionByNodeId[$neighborId]) && 1 === abs($graph->getLayoutNode($neighborId)->layer - $layer),
+        ));
         usort($present, static fn (string $leftNodeId, string $rightNodeId): int => $positionByNodeId[$leftNodeId] <=> $positionByNodeId[$rightNodeId]);
 
         return $present;
