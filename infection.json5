@@ -71,6 +71,16 @@
                 "if \\(\\$column < 0 && \\$this->labelFits\\(\\$canvas, \\$boxes, \\$row, \\$column, \\$width\\)\\) \\{"
             ]
         },
+        // The BrandesKopfPositioning conflict check: the upper node at the inner segment's
+        // position is a dummy whose only successor is that segment's lower dummy, and an edge
+        // between two dummies is never a conflict, so "> current" and ">= current" agree;
+        // excluded per mutator because the dummy-check mutants on the same condition ARE
+        // covered by golden fixtures.
+        "GreaterThan": {
+            "ignoreSourceCodeByRegex": [
+                "if \\(\\(\\$upperPosition < \\$previousInnerPosition \\|\\| \\$upperPosition > \\$currentInnerPosition\\)"
+            ]
+        },
         // Widening width()/height() by one makes the formatter column/row loops autovivify a
         // cell past the edge on every pass (the bound keeps growing), so the integration tests
         // that run first hang until the process timeout, although CanvasTest asserts the exact
@@ -83,8 +93,11 @@
         // it is equivalent. (The primary <=> keys on the usort line are deliberately NOT
         // listed: mis-sorting intervals there changes the merged output and is covered by a
         // test.)
+        // The BrandesKopfPositioning conflict scan: dummies never sit in the last layer, so
+        // the last layer pair has no inner segment and no conflict; skipping it changes nothing.
         "IncrementInteger": {
             "ignoreSourceCodeByRegex": [
+                "for \\(\\$layerOffset = 0; \\$layerOffset \\+ 1 < \\$layerCount; \\+\\+\\$layerOffset\\) \\{",
                 "return \\$maxColumn \\+ 1;",
                 "return max\\(array_keys\\(\\$this->cells\\)\\) \\+ 1;",
                 "\\$direction = \\$preferAbove \\? -1 : 1;",

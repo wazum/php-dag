@@ -17,18 +17,6 @@ namespace PhpDag\Layout;
  * Coordinates are computed in integer box-centre space with a width-aware
  * separation, then converted to left-edge columns, so variable box widths never
  * overlap. Rows are assigned per layer (cumulative height plus vertical spacing).
- *
- * @infection-ignore-all The four-pass median balance plus the final
- * min-normalisation make the rendered coordinates invariant to the internal
- * choices the surviving mutants touch — type-1 conflict marking, median-index
- * ties, candidate alignment offsets, the block-placement seed, and which
- * candidate is the width reference — because a mis-shifted pass becomes a
- * per-node outlier that the median of four discards. The behaviour that is NOT
- * invariant (separation/overlap, alignment, straightness, spacing) is exercised
- * and killed by BrandesKopfPositioningTest, and the exact coordinates are pinned
- * by AsciiDagTest::passThroughChainWithSkipsRendersExactly (an asymmetric graph
- * whose four passes genuinely disagree) plus the golden suite. Confirmed: that
- * exact snapshot cannot distinguish any surviving mutant from the original.
  */
 final readonly class BrandesKopfPositioning implements NodePositioning
 {
@@ -47,6 +35,7 @@ final readonly class BrandesKopfPositioning implements NodePositioning
 
         $this->assignRows($graph, $layerIndex);
 
+        /** @infection-ignore-all layers are numbered from 0 without gaps, so the keys already form a list */
         $layers = array_values($layerIndex);
         $centers = $this->assignCenters($graph, $layers);
 
@@ -108,7 +97,7 @@ final readonly class BrandesKopfPositioning implements NodePositioning
     private function candidate(LayoutGraph $graph, array $layers, array $conflicts, bool $vertical, bool $horizontal): array
     {
         $oriented = $this->orient($layers, $vertical, $horizontal);
-        [$root, $align] = $this->verticalAlignment($graph, $oriented, $conflicts, $vertical, $horizontal);
+        [$root, $align] = $this->verticalAlignment($graph, $oriented, $conflicts, $vertical);
         $horizontalCenters = $this->horizontalCompaction($graph, $oriented, $root, $align, $horizontal);
 
         return $this->deorient($horizontalCenters, $horizontal);
@@ -153,6 +142,7 @@ final readonly class BrandesKopfPositioning implements NodePositioning
         $layerCount = count($layers);
         for ($layerOffset = 0; $layerOffset + 1 < $layerCount; ++$layerOffset) {
             $lower = $layers[$layerOffset + 1];
+            /** @infection-ignore-all positions start at 0, so no position is below 0 or below -1 */
             $previousInnerPosition = 0;
             $scanStart = 0;
             $lowerCount = count($lower);
@@ -176,10 +166,12 @@ final readonly class BrandesKopfPositioning implements NodePositioning
                         if (($upperPosition < $previousInnerPosition || $upperPosition > $currentInnerPosition)
                             && !($this->isDummy($graph, $upperId) && $this->isDummy($graph, $scanNode))
                         ) {
+                            /** @infection-ignore-all conflicts are only looked up with isset() */
                             $conflicts[$upperId."\0".$scanNode] = true;
                         }
                     }
                 }
+                /** @infection-ignore-all rescanning the inner segment's dummy finds only its dummy predecessor, which is never a conflict */
                 $scanStart = $lowerIndex + 1;
                 $previousInnerPosition = $currentInnerPosition;
             }
@@ -215,7 +207,7 @@ final readonly class BrandesKopfPositioning implements NodePositioning
      *
      * @return array{array<string, string>, array<string, string>} [root, align]
      */
-    private function verticalAlignment(LayoutGraph $graph, array $layers, array $conflicts, bool $vertical, bool $horizontal): array
+    private function verticalAlignment(LayoutGraph $graph, array $layers, array $conflicts, bool $vertical): array
     {
         $positionByNodeId = $this->positionsWithin($layers);
         $root = [];
@@ -228,6 +220,7 @@ final readonly class BrandesKopfPositioning implements NodePositioning
         }
 
         foreach ($layers as $layer) {
+            /** @infection-ignore-all positions start at 0, so -1 and -2 both lie before every neighbour */
             $previousPosition = -1;
             foreach ($layer as $nodeId) {
                 $neighbors = $this->alignmentNeighbors($graph, $nodeId, $vertical, $positionByNodeId);
@@ -236,12 +229,8 @@ final readonly class BrandesKopfPositioning implements NodePositioning
                 }
 
                 $count = count($neighbors);
-                $low = intdiv($count - 1, 2);
                 $high = intdiv($count, 2);
-                for ($medianIndex = $low; $medianIndex <= $high; ++$medianIndex) {
-                    if ($align[$nodeId] !== $nodeId) {
-                        continue;
-                    }
+                for ($medianIndex = intdiv($count - 1, 2); $medianIndex <= $high && $align[$nodeId] === $nodeId; ++$medianIndex) {
                     $neighborId = $neighbors[$medianIndex];
                     if ($previousPosition >= $positionByNodeId[$neighborId] || $this->conflicted($conflicts, $neighborId, $nodeId)) {
                         continue;
@@ -270,10 +259,10 @@ final readonly class BrandesKopfPositioning implements NodePositioning
     {
         $neighbors = $vertical ? $graph->successors($nodeId) : $graph->predecessors($nodeId);
         $layer = $graph->getLayoutNode($nodeId)->layer;
-        $present = array_values(array_filter(
+        $present = array_filter(
             array_unique($neighbors),
             static fn (string $neighborId): bool => isset($positionByNodeId[$neighborId]) && 1 === abs($graph->getLayoutNode($neighborId)->layer - $layer),
-        ));
+        );
         usort($present, static fn (string $leftNodeId, string $rightNodeId): int => $positionByNodeId[$leftNodeId] <=> $positionByNodeId[$rightNodeId]);
 
         return $present;
@@ -305,12 +294,6 @@ final readonly class BrandesKopfPositioning implements NodePositioning
         $sink = [];
         /** @var array<string, int> $shift */
         $shift = [];
-        foreach (array_keys($root) as $nodeId) {
-            $nodeId = strval($nodeId);
-            $sink[$nodeId] = $nodeId;
-            $shift[$nodeId] = PHP_INT_MAX;
-        }
-
         foreach ($root as $nodeId => $rootId) {
             if (strval($nodeId) === $rootId) {
                 $this->placeBlock($graph, strval($nodeId), $root, $align, $predecessorInLayer, $horizontal, $horizontalCentersByBlockRoot, $sink, $shift);
@@ -340,11 +323,14 @@ final readonly class BrandesKopfPositioning implements NodePositioning
      */
     private function placeBlock(LayoutGraph $graph, string $blockRoot, array $root, array $align, array $predecessorInLayer, bool $horizontal, array &$horizontalCentersByBlockRoot, array &$sink, array &$shift): void
     {
+        /** @infection-ignore-all placing a block again gives the same centre and shift, only slower */
         if (isset($horizontalCentersByBlockRoot[$blockRoot])) {
             return;
         }
 
         $horizontalCentersByBlockRoot[$blockRoot] = 0;
+        $sink[$blockRoot] = $blockRoot;
+        $shift[$blockRoot] = PHP_INT_MAX;
         $current = $blockRoot;
         do {
             if (isset($predecessorInLayer[$current])) {
@@ -413,8 +399,8 @@ final readonly class BrandesKopfPositioning implements NodePositioning
     private function balance(array $candidates): array
     {
         $balanced = [];
-        foreach (array_keys($candidates[0]) as $nodeId) {
-            $values = [$candidates[0][$nodeId], $candidates[1][$nodeId], $candidates[2][$nodeId], $candidates[3][$nodeId]];
+        foreach ($candidates[0] as $nodeId => $first) {
+            $values = [$first, $candidates[1][$nodeId], $candidates[2][$nodeId], $candidates[3][$nodeId]];
             sort($values);
             $balanced[$nodeId] = intdiv($values[1] + $values[2], 2);
         }

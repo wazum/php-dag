@@ -109,6 +109,20 @@ final class GoldenFileTest extends TestCase
         yield 'left_to_right_labelled_parallel_pair_beside_single_edge' => ['left_to_right_labelled_parallel_pair_beside_single_edge', Graph::fromDot('digraph { a -> b [label="one"]; a -> b [label="two"]; a -> c }'), $leftToRight];
         yield 'left_to_right_two_labelled_parallel_pairs' => ['left_to_right_two_labelled_parallel_pairs', Graph::fromDot('digraph { a -> b [label="p"]; a -> b [label="q"]; a -> c [label="x"]; a -> c [label="y"] }'), $leftToRight];
         yield 'left_to_right_parallel_long_edges' => ['left_to_right_parallel_long_edges', Graph::fromDot('digraph { a -> c; a -> c; a -> b; b -> c }'), $leftToRight];
+        yield 'self_loop_beside_three_way_fan_out' => ['self_loop_beside_three_way_fan_out', Graph::fromDot('digraph { exxxx -> exxxx; fxxx -> bx; fxxx -> hxxx; fxxx -> gxx }'), $topToBottom];
+        yield 'fan_in_above_a_fan_in' => ['fan_in_above_a_fan_in', Graph::fromDot('digraph { bxxx -> fxxxx; exxxx -> d; axxx -> fxxxx; cxxxx -> fxxxx; fxxxx -> d }'), $topToBottom];
+        yield 'two_self_loops_beside_a_chain' => ['two_self_loops_beside_a_chain', Graph::fromDot('digraph { bxxx -> bxxx; exxxx -> exxxx; axx -> cxx; cxx -> dxx }'), $topToBottom];
+        yield 'long_edge_beside_a_crossing_chain' => ['long_edge_beside_a_crossing_chain', Graph::fromDot('digraph { e -> axxxx; axxxx -> bxx; e -> bxx; ix -> bxx; dxx -> hxxxx; axxxx -> ix; ix -> hxxxx }'), $topToBottom];
+        yield 'long_edges_beside_a_three_layer_chain' => ['long_edges_beside_a_three_layer_chain', Graph::fromDot('digraph { ax -> bxx; ax -> dxxx; bxx -> c; dxxx -> c; dxxx -> exxxx; exxxx -> bxx }'), $topToBottom];
+        yield 'fan_out_sharing_a_child_with_a_second_parent' => ['fan_out_sharing_a_child_with_a_second_parent', Graph::fromDot('digraph { axx -> cxx; cxx -> dxxxx; axx -> bx; axx -> dxxxx; cxx -> bx; ex -> cxx }'), $topToBottom];
+        yield 'long_edge_between_two_fan_ins' => ['long_edge_between_two_fan_ins', Graph::fromDot('digraph { exxxx -> fxxx; dxx -> gxxx; fxxx -> a; exxxx -> gxxx; cxx -> a; gxxx -> a; fxxx -> gxxx }'), $topToBottom];
+        yield 'fan_out_beside_a_lone_edge' => ['fan_out_beside_a_lone_edge', Graph::fromDot('digraph { hxx -> i; axxxx -> f; exx -> hxx; hxx -> bxxx; hxx -> gx }'), $topToBottom];
+        yield 'self_loop_on_a_fan_out_child' => ['self_loop_on_a_fan_out_child', Graph::fromDot('digraph { axxx -> gx; axxx -> cxx; axxx -> dxxxx; hx -> cxx; f -> dxxxx; gx -> gx }'), $topToBottom];
+        yield 'long_edges_around_a_deep_chain' => ['long_edges_around_a_deep_chain', Graph::fromDot('digraph { a -> fxxxx; hxxx -> d; hxxx -> a; ix -> d; ix -> b; g -> fxxxx; cxxxx -> d; fxxxx -> cxxxx; g -> hxxx; fxxxx -> b }'), $topToBottom];
+        yield 'feedback_edge_beside_long_edges' => ['feedback_edge_beside_long_edges', Graph::fromDot('digraph { bxx -> hxxxx; a -> hxxxx; hxxxx -> dxx; e -> e; cx -> i; bxx -> i; fxxx -> a; gxx -> bxx; gxx -> i; dxx -> a; i -> dxx; bxx -> cx }'), $topToBottom];
+        yield 'late_sources_beside_a_chain' => ['late_sources_beside_a_chain', Graph::fromDot('digraph { fxxx -> hxx; cxxx -> hxx; gxxxx -> ax; gxxxx -> bxxx; ex -> hxx; ax -> fxxx }'), $topToBottom];
+        yield 'two_feedback_edges_from_one_node' => ['two_feedback_edges_from_one_node', Graph::fromDot('digraph { n5 -> n4; n0 -> n1; n5 -> n1; n5 -> n0; n0 -> n5; n2 -> n5; n2 -> n0; n0 -> n2 }'), $topToBottom];
+        yield 'feedback_edge_into_a_fan_out_child' => ['feedback_edge_into_a_fan_out_child', Graph::fromDot('digraph { n0 -> n5; n1 -> n0; n0 -> n1; n0 -> n4; n2 -> n5; n4 -> n1; n4 -> n2 }'), $topToBottom];
         yield 'left_to_right_cluster' => ['left_to_right_cluster', self::clusteredPipeline(), $leftToRight];
         yield 'left_to_right_cluster_evicts' => ['left_to_right_cluster_evicts', self::clusterEvictsForeign(), $leftToRight];
     }
