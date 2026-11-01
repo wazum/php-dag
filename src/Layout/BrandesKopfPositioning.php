@@ -374,23 +374,10 @@ final readonly class BrandesKopfPositioning implements NodePositioning
         $leftWidth = $graph->getLayoutNode($left)->boxWidth();
         $rightWidth = $graph->getLayoutNode($right)->boxWidth();
 
-        return ($leftWidth - intdiv($leftWidth, 2)) + intdiv($rightWidth, 2) + $this->horizontalSpacing + $this->selfLoopClearance($graph, $left);
-    }
+        $selfLoopClearance = ($graph->hasSelfLoop($left) && !$graph->hasFeedbackEdge($left) ? 2 : 0)
+            + ($graph->hasSelfLoop($right) && $graph->hasFeedbackEdge($right) ? 2 : 0);
 
-    /**
-     * A self-loop is drawn as a lane two columns past the node's right edge
-     * (SelfLoopRouter), so the node to its right must reserve that footprint to
-     * keep an empty column past the lane.
-     */
-    private function selfLoopClearance(LayoutGraph $graph, string $nodeId): int
-    {
-        foreach ($graph->selfLoops() as $loop) {
-            if ($loop->edge->sourceId === $nodeId) {
-                return 2;
-            }
-        }
-
-        return 0;
+        return ($leftWidth - intdiv($leftWidth, 2)) + intdiv($rightWidth, 2) + $this->horizontalSpacing + $selfLoopClearance;
     }
 
     /**

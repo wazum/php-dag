@@ -159,7 +159,7 @@ final class AsciiDagBuilder
 
         $pipeline->add(new DummyNodeRemover());
         $pipeline->add(new FeedbackEdgeRouter($this->direction));
-        $pipeline->add(new SelfLoopRouter());
+        $pipeline->add(new SelfLoopRouter($this->direction));
 
         return $pipeline;
     }

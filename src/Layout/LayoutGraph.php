@@ -212,6 +212,28 @@ final class LayoutGraph
         return $this->selfLoops;
     }
 
+    public function hasSelfLoop(string $nodeId): bool
+    {
+        foreach ($this->selfLoops as $loop) {
+            if ($loop->edge->sourceId === $nodeId) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public function hasFeedbackEdge(string $nodeId): bool
+    {
+        foreach ([...$this->incomingEdges($nodeId), ...$this->outgoingEdges($nodeId)] as $edge) {
+            if ($edge->reversed) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function buildLayerIndex(): void
     {
         $this->layerIndex = [];
