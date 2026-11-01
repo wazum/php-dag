@@ -106,7 +106,14 @@ foreach ($arguments as $argument) {
 
 $ansi ??= function_exists('stream_isatty') && @stream_isatty(STDOUT);
 
+if (null === $file && function_exists('stream_isatty') && @stream_isatty(STDIN)) {
+    fail(USAGE);
+}
+
 $source = null === $file || '-' === $file ? 'php://stdin' : $file;
+if (is_dir($source)) {
+    fail(sprintf('"%s" is not a file.', ControlCharacters::escape($source)));
+}
 $dot = @file_get_contents($source);
 if (false === $dot) {
     fail(sprintf('Cannot read input from "%s".', ControlCharacters::escape($source)));
