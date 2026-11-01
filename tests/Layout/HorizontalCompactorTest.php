@@ -81,4 +81,25 @@ final class HorizontalCompactorTest extends TestCase
 
         self::assertSame($nodeA->boxWidth() + 2, $nodeB->column, 'A gap already at minimum spacing must not move');
     }
+
+    #[Test]
+    public function leavesAGapNarrowerThanRequiredAsItIs(): void
+    {
+        $graph = new Graph();
+        $graph->addNode(new Node('A', 'Alpha'));
+        $graph->addNode(new Node('B', 'Beta'));
+
+        $layoutGraph = LayoutGraph::fromGraph($graph);
+        $nodeA = $layoutGraph->getLayoutNode('A');
+        $nodeA->layer = 0;
+        $nodeA->column = 0;
+        $nodeB = $layoutGraph->getLayoutNode('B');
+        $nodeB->layer = 1;
+        $nodeB->column = $nodeA->boxWidth() + 1;
+        $layoutGraph->buildLayerIndex();
+
+        (new HorizontalCompactor())->process($layoutGraph);
+
+        self::assertSame($nodeA->boxWidth() + 1, $nodeB->column);
+    }
 }

@@ -23,6 +23,7 @@ final readonly class VerticalCompactor implements Processor
 
         [$clusterTopLayers, $clusterBottomLayers] = LayerTransitions::clusterBoundaryLayers($graph);
 
+        $shift = 0;
         for ($layerOffset = 0, $layerCount = count($layers); $layerOffset < $layerCount - 1; ++$layerOffset) {
             /** @infection-ignore-all init value is consumed by max(); every node bottom row is positive */
             $maxBottomRow = 0;
@@ -31,9 +32,10 @@ final readonly class VerticalCompactor implements Processor
                 $maxBottomRow = max($maxBottomRow, $node->row + $node->boxHeight());
             }
 
+            $nextLayer = $layerIndex[$layers[$layerOffset + 1]];
             $minTopRow = PHP_INT_MAX;
-            foreach ($layerIndex[$layers[$layerOffset + 1]] as $nodeId) {
-                $minTopRow = min($minTopRow, $graph->getLayoutNode($nodeId)->row);
+            foreach ($nextLayer as $nodeId) {
+                $minTopRow = min($minTopRow, $graph->getLayoutNode($nodeId)->row - $shift);
             }
 
             $requiredSpacing = $this->minimumVerticalSpacing
@@ -43,11 +45,10 @@ final readonly class VerticalCompactor implements Processor
 
             /** @infection-ignore-all shifting by a zero excess is a no-op; > 0 and >= 0 are equivalent */
             if ($excess > 0) {
-                for ($followingLayerOffset = $layerOffset + 1; $followingLayerOffset < $layerCount; ++$followingLayerOffset) {
-                    foreach ($layerIndex[$layers[$followingLayerOffset]] as $nodeId) {
-                        $graph->getLayoutNode($nodeId)->row -= $excess;
-                    }
-                }
+                $shift += $excess;
+            }
+            foreach ($nextLayer as $nodeId) {
+                $graph->getLayoutNode($nodeId)->row -= $shift;
             }
         }
     }

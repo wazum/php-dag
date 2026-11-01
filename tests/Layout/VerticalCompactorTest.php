@@ -56,6 +56,20 @@ final class VerticalCompactorTest extends TestCase
     }
 
     #[Test]
+    public function leavesAGapNarrowerThanRequiredAsItIs(): void
+    {
+        $layoutGraph = $this->buildPositionedGraph(
+            nodes: [new Node('A', 'Alpha'), new Node('B', 'Beta')],
+            edges: [new Edge('A', 'B')],
+        );
+        $rowBefore = $layoutGraph->getLayoutNode('B')->row;
+
+        (new VerticalCompactor(minimumVerticalSpacing: 9))->process($layoutGraph);
+
+        self::assertSame($rowBefore, $layoutGraph->getLayoutNode('B')->row);
+    }
+
+    #[Test]
     public function compactsMiddleGapShiftingAllLowerLayers(): void
     {
         $layoutGraph = $this->buildPositionedGraph(

@@ -22,6 +22,7 @@ final readonly class HorizontalCompactor implements Processor
 
         [$clusterFirstLayers, $clusterLastLayers] = LayerTransitions::clusterBoundaryLayers($graph);
 
+        $shift = 0;
         for ($layerOffset = 0, $layerCount = count($layers); $layerOffset < $layerCount - 1; ++$layerOffset) {
             /** @infection-ignore-all starting at -1 is equivalent: max() with box widths >= 1 always wins */
             $maxRightColumn = 0;
@@ -30,13 +31,14 @@ final readonly class HorizontalCompactor implements Processor
                 // A self-loop draws a lane one column past the node's right edge
                 // (SelfLoopRouter); count it so the next layer is not compacted
                 // onto the loop.
-                $rightEdge = $node->column + $node->boxWidth() + $this->selfLoopLaneWidth($graph, $nodeId);
+                $rightEdge = $node->column + $node->boxWidth() + ($graph->hasSelfLoop($nodeId) ? 2 : 0);
                 $maxRightColumn = max($maxRightColumn, $rightEdge);
             }
 
+            $nextLayer = $layerIndex[$layers[$layerOffset + 1]];
             $minLeftColumn = PHP_INT_MAX;
-            foreach ($layerIndex[$layers[$layerOffset + 1]] as $nodeId) {
-                $minLeftColumn = min($minLeftColumn, $graph->getLayoutNode($nodeId)->column);
+            foreach ($nextLayer as $nodeId) {
+                $minLeftColumn = min($minLeftColumn, $graph->getLayoutNode($nodeId)->column - $shift);
             }
 
             /** @infection-ignore-all bend allowance can only be reclaimed, never added: the positioner emits exactly the required spacing, so a larger requirement is a no-op */
@@ -47,23 +49,11 @@ final readonly class HorizontalCompactor implements Processor
 
             /** @infection-ignore-all shifting by an excess of zero is a no-op */
             if ($excess > 0) {
-                for ($followingLayerOffset = $layerOffset + 1; $followingLayerOffset < $layerCount; ++$followingLayerOffset) {
-                    foreach ($layerIndex[$layers[$followingLayerOffset]] as $nodeId) {
-                        $graph->getLayoutNode($nodeId)->column -= $excess;
-                    }
-                }
+                $shift += $excess;
+            }
+            foreach ($nextLayer as $nodeId) {
+                $graph->getLayoutNode($nodeId)->column -= $shift;
             }
         }
-    }
-
-    private function selfLoopLaneWidth(LayoutGraph $graph, string $nodeId): int
-    {
-        foreach ($graph->selfLoops() as $loop) {
-            if ($loop->edge->sourceId === $nodeId) {
-                return 2;
-            }
-        }
-
-        return 0;
     }
 }
