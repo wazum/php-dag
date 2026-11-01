@@ -223,15 +223,28 @@ final class LayoutGraph
         return false;
     }
 
-    public function hasFeedbackEdge(string $nodeId): bool
+    public function hasEndSideFeedbackEdge(string $nodeId): bool
     {
         foreach ([...$this->incomingEdges($nodeId), ...$this->outgoingEdges($nodeId)] as $edge) {
-            if ($edge->reversed) {
+            if ($edge->reversed && !$this->feedbackRunsOnStartSide($edge)) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    public function feedbackRunsOnStartSide(LayoutEdge $edge): bool
+    {
+        $blockedAtEnd = false;
+        foreach ([$edge->sourceId(), $edge->targetId()] as $nodeId) {
+            if ($this->hasRealNodeBeside($nodeId, after: false)) {
+                return false;
+            }
+            $blockedAtEnd = $blockedAtEnd || $this->hasRealNodeBeside($nodeId, after: true);
+        }
+
+        return $blockedAtEnd;
     }
 
     public function buildLayerIndex(): void
@@ -354,6 +367,20 @@ final class LayoutGraph
         }
 
         return $pairCount;
+    }
+
+    private function hasRealNodeBeside(string $nodeId, bool $after): bool
+    {
+        $layerNodeIds = $this->layerIndex[$this->getLayoutNode($nodeId)->layer] ?? [];
+        $position = (int) array_search($nodeId, $layerNodeIds, true);
+        $besideNodeIds = $after ? array_slice($layerNodeIds, $position + 1) : array_slice($layerNodeIds, 0, $position);
+        foreach ($besideNodeIds as $besideNodeId) {
+            if ($this->getLayoutNode($besideNodeId) instanceof RealLayoutNode) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function rebuildEdgeIndexes(): void

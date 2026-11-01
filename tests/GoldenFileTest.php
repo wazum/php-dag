@@ -72,6 +72,7 @@ final class GoldenFileTest extends TestCase
         yield 'fan_outs_with_outer_labels' => ['fan_outs_with_outer_labels', self::fanOutsWithOuterLabels(), $topToBottom];
         yield 'self_loop_beside_feedback' => ['self_loop_beside_feedback', Graph::fromDot('digraph { a -> b; b -> a; b -> b }'), $topToBottom];
         yield 'west_self_loop_beside_neighbour' => ['west_self_loop_beside_neighbour', Graph::fromDot('digraph { r -> x; r -> b; b -> r; b -> b }'), $topToBottom];
+        yield 'feedback_beside_a_neighbour' => ['feedback_beside_a_neighbour', Graph::fromDot('digraph { r -> b; r -> x; b -> r }'), $topToBottom];
         yield 'highlighted_path' => ['highlighted_path', self::highlightedPath(), $topToBottom];
         yield 'cycle' => ['cycle', self::cycle(), $topToBottom];
         yield 'disconnected_components' => ['disconnected_components', self::disconnectedComponents(), $topToBottom];
@@ -88,6 +89,7 @@ final class GoldenFileTest extends TestCase
         yield 'left_to_right_workflow' => ['left_to_right_workflow', self::labeledWorkflow(), $leftToRight];
         yield 'network_simplex' => ['network_simplex', self::floatingNode(), AsciiDag::builder()->quality(LayoutQuality::Quality)->build()];
         yield 'left_to_right_self_loop_beside_feedback' => ['left_to_right_self_loop_beside_feedback', Graph::fromDot('digraph { a -> b; b -> a; b -> b }'), $leftToRight];
+        yield 'left_to_right_feedback_beside_a_neighbour' => ['left_to_right_feedback_beside_a_neighbour', Graph::fromDot('digraph { r -> b; r -> x; b -> r }'), $leftToRight];
         yield 'left_to_right_cluster' => ['left_to_right_cluster', self::clusteredPipeline(), $leftToRight];
         yield 'left_to_right_cluster_evicts' => ['left_to_right_cluster_evicts', self::clusterEvictsForeign(), $leftToRight];
     }

@@ -158,6 +158,53 @@ final class FeedbackEdgeRouterTest extends TestCase
         self::assertCount(3, $edge->waypoints, 'The two coinciding lane waypoints must collapse into one');
     }
 
+    #[Test]
+    public function stacksTopToBottomStartSideLanesOutwardFromTheLeftmostBox(): void
+    {
+        $graph = $this->buildCycleBlockedOnTheEndSide();
+
+        (new FeedbackEdgeRouter(FlowDirection::TopToBottom))->process($graph);
+
+        [$first, $second] = $this->reversedEdges($graph);
+        self::assertSame(EdgePort::West, $first->sourcePort);
+        self::assertSame([-3, -5], [$first->waypoints[1]->column, $second->waypoints[1]->column]);
+        self::assertSame($graph->getLayoutNode('C')->column - 1, $first->waypoints[0]->column, 'The edge leaves just left of the source box');
+    }
+
+    #[Test]
+    public function stacksLeftToRightStartSideLanesOutwardFromTheTopmostBox(): void
+    {
+        $graph = $this->buildCycleBlockedOnTheEndSide();
+
+        (new FeedbackEdgeRouter(FlowDirection::LeftToRight))->process($graph);
+
+        [$first, $second] = $this->reversedEdges($graph);
+        self::assertSame(EdgePort::North, $first->sourcePort);
+        self::assertSame([-2, -4], [$first->waypoints[1]->row, $second->waypoints[1]->row]);
+        self::assertSame($graph->getLayoutNode('C')->row - 1, $first->waypoints[0]->row, 'The edge leaves just above the source box');
+    }
+
+    private function buildCycleBlockedOnTheEndSide(): LayoutGraph
+    {
+        $graph = new LayoutGraph();
+        foreach (['A' => 0, 'B' => 1, 'C' => 2] as $nodeId => $layer) {
+            foreach ([$nodeId => 0, 'X'.$nodeId => 10] as $placedId => $offset) {
+                $node = new RealLayoutNode($placedId, new Node($placedId, $placedId));
+                $node->layer = $layer;
+                $node->row = $layer * 5 + $offset;
+                $node->column = $layer * 5 + $offset;
+                $graph->addNode($node);
+            }
+        }
+        $graph->buildLayerIndex();
+        $graph->addEdge(new LayoutEdge(new Edge('A', 'B')));
+        $graph->addEdge(new LayoutEdge(new Edge('B', 'C')));
+        $graph->addEdge(new LayoutEdge(new Edge('C', 'A'), reversed: true));
+        $graph->addEdge(new LayoutEdge(new Edge('B', 'A'), reversed: true));
+
+        return $graph;
+    }
+
     private function buildManualThreeNodeCycle(): LayoutGraph
     {
         $graph = new LayoutGraph();

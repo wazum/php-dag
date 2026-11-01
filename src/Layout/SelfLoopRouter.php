@@ -30,7 +30,7 @@ final readonly class SelfLoopRouter implements Processor
             $width = $node->boxWidth();
             $height = $node->boxHeight();
             $centerRow = $node->row + intdiv($height, 2);
-            $mirrored = $graph->hasFeedbackEdge($node->id);
+            $mirrored = $graph->hasEndSideFeedbackEdge($node->id);
             $onWestSide = $mirrored && FlowDirection::TopToBottom === $this->flowDirection;
             $onNorthSide = $mirrored && FlowDirection::LeftToRight === $this->flowDirection;
             $loopRow = $onNorthSide ? $node->row - 1 : $node->row + $height;

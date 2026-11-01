@@ -14,6 +14,7 @@ use PhpDag\Layout\LayoutEdge;
 use PhpDag\Layout\LayoutGraph;
 use PhpDag\Layout\RealLayoutNode;
 use PhpDag\Style\EdgeStrokeStyle;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -466,5 +467,39 @@ final class LayoutGraphTest extends TestCase
 
         self::assertCount(1, $originalEdges);
         self::assertSame(EdgeStrokeStyle::Dashed, $originalEdges[0]->edgeStrokeStyle);
+    }
+
+    /**
+     * @param list<list<string>> $layers
+     */
+    #[Test]
+    #[DataProvider('feedbackSides')]
+    public function routesFeedbackOnTheStartSideOnlyWhenTheEndSideIsBlockedAndTheStartSideIsFree(array $layers, bool $expected): void
+    {
+        $graph = new LayoutGraph();
+        foreach ($layers as $layer => $nodeIds) {
+            foreach ($nodeIds as $nodeId) {
+                $node = str_starts_with($nodeId, '~') ? new DummyLayoutNode($nodeId, 'S', 'T') : new RealLayoutNode($nodeId, new Node($nodeId, $nodeId));
+                $node->layer = $layer;
+                $graph->addNode($node);
+            }
+        }
+        $graph->buildLayerIndex();
+        foreach ($layers as $layer => $nodeIds) {
+            $graph->setLayerOrder($layer, $nodeIds);
+        }
+        $feedback = new LayoutEdge(new Edge('T', 'S'), reversed: true);
+        $graph->addEdge($feedback);
+
+        self::assertSame($expected, $graph->feedbackRunsOnStartSide($feedback));
+    }
+
+    /** @return iterable<string, array{list<list<string>>, bool}> */
+    public static function feedbackSides(): iterable
+    {
+        yield 'nothing beside either end' => [[['S'], ['T']], false];
+        yield 'a box after the upper end' => [[['S', 'X'], ['T']], true];
+        yield 'boxes on both sides' => [[['S', 'X'], ['Y', 'T']], false];
+        yield 'only a lane before the upper end' => [[['~lane', 'S', 'X'], ['T']], true];
     }
 }

@@ -374,8 +374,8 @@ final readonly class BrandesKopfPositioning implements NodePositioning
         $leftWidth = $graph->getLayoutNode($left)->boxWidth();
         $rightWidth = $graph->getLayoutNode($right)->boxWidth();
 
-        $selfLoopClearance = ($graph->hasSelfLoop($left) && !$graph->hasFeedbackEdge($left) ? 2 : 0)
-            + ($graph->hasSelfLoop($right) && $graph->hasFeedbackEdge($right) ? 2 : 0);
+        $selfLoopClearance = ($graph->hasSelfLoop($left) && !$graph->hasEndSideFeedbackEdge($left) ? 2 : 0)
+            + ($graph->hasSelfLoop($right) && $graph->hasEndSideFeedbackEdge($right) ? 2 : 0);
 
         return ($leftWidth - intdiv($leftWidth, 2)) + intdiv($rightWidth, 2) + $this->horizontalSpacing + $selfLoopClearance;
     }
