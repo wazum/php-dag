@@ -25,6 +25,12 @@ final readonly class LeftToRightLabelReserver implements Processor
     private function calculateGapShifts(LayoutGraph $graph): array
     {
         $gapShifts = [];
+        $groupByNodeId = [];
+        foreach ($graph->groups() as $group) {
+            foreach ($group->nodeIds as $nodeId) {
+                $groupByNodeId[$nodeId] = $group->id;
+            }
+        }
 
         foreach ($graph->singleLabelledEdges() as $edge) {
             if (null === $edge->label) {
@@ -40,8 +46,10 @@ final readonly class LeftToRightLabelReserver implements Processor
                 LabelPosition::Middle => intdiv($sourceLayer + $targetLayer, 2),
             };
 
+            // A group border in the gap leaves the label only the outer side of it.
+            $crossesGroupBorder = ($groupByNodeId[$edge->sourceId] ?? null) !== ($groupByNodeId[$edge->targetId] ?? null);
             /** @infection-ignore-all Coalesce is defensive for first-seen gap key; max(0,1) == max(-1,1) == max(1,1) */
-            $gapShifts[$labelGap] = max($gapShifts[$labelGap] ?? 0, 1);
+            $gapShifts[$labelGap] = max($gapShifts[$labelGap] ?? 0, $crossesGroupBorder ? $edge->label->width() + 2 : 1);
         }
 
         return $gapShifts;

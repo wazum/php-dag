@@ -550,8 +550,8 @@ final class LabelRendererTest extends TestCase
     public function placesUpwardLabelAtTopRowWhenIntermediateRowsAreBlocked(): void
     {
         $canvas = new Canvas();
-        $canvas->putCharacter(2, 5, 'X', 10);
-        $canvas->putCharacter(1, 5, 'X', 10);
+        $this->blockRow($canvas, 2);
+        $this->blockRow($canvas, 1);
         $layoutGraph = $this->labeledEdgeGraph([[5, 0], [3, 0], [3, 10]], new Label('yes'));
 
         (new LabelRenderer(FlowDirection::LeftToRight))->render($canvas, $layoutGraph);
@@ -564,8 +564,8 @@ final class LabelRendererTest extends TestCase
     public function fallsBackBelowWhenAllRowsAboveUpwardEdgeAreBlocked(): void
     {
         $canvas = new Canvas();
-        $canvas->putCharacter(1, 5, 'X', 10);
-        $canvas->putCharacter(0, 5, 'X', 10);
+        $this->blockRow($canvas, 1);
+        $this->blockRow($canvas, 0);
         $layoutGraph = $this->labeledEdgeGraph([[4, 0], [2, 0], [2, 10]], new Label('yes'));
 
         (new LabelRenderer(FlowDirection::LeftToRight))->render($canvas, $layoutGraph);
@@ -578,9 +578,9 @@ final class LabelRendererTest extends TestCase
     public function fallbackScansPastBlockedRowDirectlyBelowUpwardEdge(): void
     {
         $canvas = new Canvas();
-        $canvas->putCharacter(1, 5, 'X', 10);
-        $canvas->putCharacter(0, 5, 'X', 10);
-        $canvas->putCharacter(3, 5, 'X', 10);
+        $this->blockRow($canvas, 1);
+        $this->blockRow($canvas, 0);
+        $this->blockRow($canvas, 3);
         $layoutGraph = $this->labeledEdgeGraph([[4, 0], [2, 0], [2, 10]], new Label('yes'));
 
         (new LabelRenderer(FlowDirection::LeftToRight))->render($canvas, $layoutGraph);
@@ -590,80 +590,7 @@ final class LabelRendererTest extends TestCase
     }
 
     #[Test]
-    public function fallbackSkipsRowWhoseLeftNeighborIsOccupied(): void
-    {
-        $canvas = new Canvas();
-        $canvas->putCharacter(1, 5, 'X', 10);
-        $canvas->putCharacter(0, 5, 'X', 10);
-        $canvas->putCharacter(3, 4, 'X', 10);
-        $layoutGraph = $this->labeledEdgeGraph([[4, 0], [2, 0], [2, 10]], new Label('yes'));
-
-        (new LabelRenderer(FlowDirection::LeftToRight))->render($canvas, $layoutGraph);
-
-        self::assertSame('y', $canvas->get(4, 5)->resolvedCharacter(),
-            'The downward fallback must skip a row whose cell left of the label is occupied to keep a 1-space margin');
-    }
-
-    #[Test]
-    public function fallbackSkipsRowWhoseRightMarginIsOccupied(): void
-    {
-        $canvas = new Canvas();
-        $canvas->putCharacter(1, 5, 'X', 10);
-        $canvas->putCharacter(0, 5, 'X', 10);
-        $canvas->putCharacter(3, 8, 'X', 10);
-        $layoutGraph = $this->labeledEdgeGraph([[4, 0], [2, 0], [2, 10]], new Label('yes'));
-
-        (new LabelRenderer(FlowDirection::LeftToRight))->render($canvas, $layoutGraph);
-
-        self::assertSame('y', $canvas->get(4, 5)->resolvedCharacter(),
-            'The downward fallback must skip a row whose cell right of the label is occupied to keep a 1-space margin');
-    }
-
-    #[Test]
-    public function fallbackAcceptsRowWithExactlyOneFreeCellAfterLabel(): void
-    {
-        $canvas = new Canvas();
-        $canvas->putCharacter(1, 5, 'X', 10);
-        $canvas->putCharacter(0, 5, 'X', 10);
-        $canvas->putCharacter(3, 9, 'X', 10);
-        $layoutGraph = $this->labeledEdgeGraph([[4, 0], [2, 0], [2, 10]], new Label('yes'));
-
-        (new LabelRenderer(FlowDirection::LeftToRight))->render($canvas, $layoutGraph);
-
-        self::assertSame('y', $canvas->get(3, 5)->resolvedCharacter(),
-            'One blank margin cell after the label suffices in the fallback; occupancy beyond it must not reject the row');
-    }
-
-    #[Test]
-    public function fallbackOverwritesLowerLayerGlyphUnderLabelBody(): void
-    {
-        $canvas = new Canvas();
-        $canvas->putCharacter(1, 5, 'X', 10);
-        $canvas->putCharacter(0, 5, 'X', 10);
-        $canvas->putCharacter(3, 5, '│', 5);
-        $layoutGraph = $this->labeledEdgeGraph([[4, 0], [2, 0], [2, 10]], new Label('yes'));
-
-        (new LabelRenderer(FlowDirection::LeftToRight))->render($canvas, $layoutGraph);
-
-        self::assertSame('y', $canvas->get(3, 5)->resolvedCharacter(),
-            'Only the margin cell left of the label must be free in the fallback; the label body may overwrite lower z-index glyphs');
-    }
-
-    #[Test]
-    public function fallsBackBelowWhenUpwardEdgeRowLiesBeyondCanvasContent(): void
-    {
-        $canvas = new Canvas();
-        $canvas->putCharacter(0, 0, 'X', 10);
-        $layoutGraph = $this->labeledEdgeGraph([[5, 0], [3, 0], [3, 10]], new Label('yes'));
-
-        (new LabelRenderer(FlowDirection::LeftToRight))->render($canvas, $layoutGraph);
-
-        self::assertSame('y', $canvas->get(4, 5)->resolvedCharacter(),
-            'An upward scan ending at the canvas-height boundary must trigger the downward fallback below the edge');
-    }
-
-    #[Test]
-    public function skipsCandidateRowWhoseLeftNeighborIsOccupied(): void
+    public function slidesRightAlongTheEdgeWhenTheCellLeftOfTheLabelIsTaken(): void
     {
         $canvas = new Canvas();
         $canvas->putCharacter(3, 4, 'X', 10);
@@ -671,8 +598,109 @@ final class LabelRendererTest extends TestCase
 
         (new LabelRenderer(FlowDirection::LeftToRight))->render($canvas, $layoutGraph);
 
-        self::assertSame('y', $canvas->get(4, 5)->resolvedCharacter(),
-            'A row whose cell left of the label is occupied must be skipped to keep a 1-space margin');
+        self::assertSame('y', $canvas->get(3, 6)->resolvedCharacter());
+    }
+
+    #[Test]
+    public function slidesLeftAlongTheEdgeWhenTheCellRightOfTheLabelIsTaken(): void
+    {
+        $canvas = new Canvas();
+        $canvas->putCharacter(3, 8, 'X', 10);
+        $layoutGraph = $this->labeledEdgeGraph([[2, 0], [2, 10]], new Label('yes'));
+
+        (new LabelRenderer(FlowDirection::LeftToRight))->render($canvas, $layoutGraph);
+
+        self::assertSame('y', $canvas->get(3, 4)->resolvedCharacter());
+    }
+
+    #[Test]
+    public function startsASourceLabelJustAfterTheEdgeStart(): void
+    {
+        $canvas = new Canvas();
+        $layoutGraph = $this->labeledEdgeGraph([[2, 0], [2, 10]], new Label('yes', LabelPosition::Source));
+
+        (new LabelRenderer(FlowDirection::LeftToRight))->render($canvas, $layoutGraph);
+
+        self::assertSame('y', $canvas->get(3, 1)->resolvedCharacter());
+    }
+
+    #[Test]
+    public function startsATargetLabelJustBeforeTheEdgeEnd(): void
+    {
+        $canvas = new Canvas();
+        $layoutGraph = $this->labeledEdgeGraph([[2, 0], [2, 10]], new Label('yes', LabelPosition::Target));
+
+        (new LabelRenderer(FlowDirection::LeftToRight))->render($canvas, $layoutGraph);
+
+        self::assertSame('y', $canvas->get(3, 9)->resolvedCharacter());
+    }
+
+    #[Test]
+    public function slidesNoFurtherRightThanTheEdgeRunAllows(): void
+    {
+        $canvas = new Canvas();
+        foreach ([0, 1, 2, 3] as $column) {
+            $canvas->putCharacter(3, $column, 'X', 10);
+        }
+        $layoutGraph = $this->labeledEdgeGraph([[2, 0], [2, 6]], new Label('yes'));
+
+        (new LabelRenderer(FlowDirection::LeftToRight))->render($canvas, $layoutGraph);
+
+        self::assertSame('y', $canvas->get(4, 3)->resolvedCharacter(), 'Starting at column 5 would run the label past the edge end, so the next row is used');
+    }
+
+    #[Test]
+    public function slidesToTheLastStartColumnInsideTheEdgeRun(): void
+    {
+        $canvas = new Canvas();
+        foreach ([0, 1, 2] as $column) {
+            $canvas->putCharacter(3, $column, 'X', 10);
+        }
+        $layoutGraph = $this->labeledEdgeGraph([[2, 0], [2, 6]], new Label('yes'));
+
+        (new LabelRenderer(FlowDirection::LeftToRight))->render($canvas, $layoutGraph);
+
+        self::assertSame('y', $canvas->get(3, 4)->resolvedCharacter());
+    }
+
+    #[Test]
+    public function slidesASourceLabelAllTheWayToTheFarEndOfTheEdgeRun(): void
+    {
+        $canvas = new Canvas();
+        foreach (range(0, 6) as $column) {
+            $canvas->putCharacter(3, $column, 'X', 10);
+        }
+        $layoutGraph = $this->labeledEdgeGraph([[2, 0], [2, 10]], new Label('yes', LabelPosition::Source));
+
+        (new LabelRenderer(FlowDirection::LeftToRight))->render($canvas, $layoutGraph);
+
+        self::assertSame('y', $canvas->get(3, 8)->resolvedCharacter());
+    }
+
+    #[Test]
+    public function slidesATargetLabelAllTheWayToTheStartOfTheEdgeRun(): void
+    {
+        $canvas = new Canvas();
+        foreach (range(4, 11) as $column) {
+            $canvas->putCharacter(3, $column, 'X', 10);
+        }
+        $layoutGraph = $this->labeledEdgeGraph([[2, 0], [2, 10]], new Label('yes', LabelPosition::Target));
+
+        (new LabelRenderer(FlowDirection::LeftToRight))->render($canvas, $layoutGraph);
+
+        self::assertSame('y', $canvas->get(3, 0)->resolvedCharacter());
+    }
+
+    #[Test]
+    public function slidesAlongAnUpwardEdgeWhenTheCellAboveTheAnchorIsTaken(): void
+    {
+        $canvas = new Canvas();
+        $canvas->putCharacter(1, 4, 'X', 10);
+        $layoutGraph = $this->labeledEdgeGraph([[4, 0], [2, 0], [2, 10]], new Label('yes'));
+
+        (new LabelRenderer(FlowDirection::LeftToRight))->render($canvas, $layoutGraph);
+
+        self::assertSame('y', $canvas->get(1, 6)->resolvedCharacter());
     }
 
     #[Test]
@@ -684,11 +712,11 @@ final class LabelRendererTest extends TestCase
 
         (new LabelRenderer(FlowDirection::LeftToRight))->render($canvas, $layoutGraph);
 
-        self::assertSame('y', $canvas->get(4, 5)->resolvedCharacter(), '漢 fills columns 3 and 4, so the margin left of a label at column 5 is taken');
+        self::assertSame('y', $canvas->get(3, 6)->resolvedCharacter(), '漢 fills columns 3 and 4, so the margin left of a label at column 5 is taken');
     }
 
     #[Test]
-    public function overwritesLowerLayerGlyphUnderLabelBody(): void
+    public function keepsAnEdgeGlyphAndPlacesTheLabelBesideIt(): void
     {
         $canvas = new Canvas();
         $canvas->putCharacter(3, 5, '│', 5);
@@ -696,17 +724,15 @@ final class LabelRendererTest extends TestCase
 
         (new LabelRenderer(FlowDirection::LeftToRight))->render($canvas, $layoutGraph);
 
-        self::assertSame('y', $canvas->get(3, 5)->resolvedCharacter(),
-            'Only the margin cell left of the label is required to be free; the label body may overwrite lower z-index glyphs');
+        self::assertSame('│', $canvas->get(3, 5)->resolvedCharacter());
+        self::assertSame('y', $canvas->get(3, 7)->resolvedCharacter());
     }
 
     #[Test]
     public function skipsCandidateRowWhereLabelBodyOverlapsBlockedCells(): void
     {
         $canvas = new Canvas();
-        $canvas->putCharacter(3, 5, 'X', 10);
-        $canvas->putCharacter(3, 6, 'X', 10);
-        $canvas->putCharacter(3, 7, 'X', 10);
+        $this->blockRow($canvas, 3);
         $layoutGraph = $this->labeledEdgeGraph([[2, 0], [2, 10]], new Label('yes'));
 
         (new LabelRenderer(FlowDirection::LeftToRight))->render($canvas, $layoutGraph);
@@ -1261,6 +1287,13 @@ final class LabelRendererTest extends TestCase
         $layoutGraph->addNode($bystander);
 
         return $layoutGraph;
+    }
+
+    private function blockRow(Canvas $canvas, int $row): void
+    {
+        for ($column = -1; $column <= 11; ++$column) {
+            $canvas->putCharacter($row, $column, 'X', 10);
+        }
     }
 
     /** @param list<array{int, int}> $waypointCoordinates */

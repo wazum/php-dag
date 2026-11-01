@@ -24,6 +24,7 @@ These are breaking changes; the next release is 2.0.0.
 
 ### Fixed
 
+- Left-to-right edge labels no longer overwrite group borders or other edges. A labelled edge that crosses a group border gets room for its label outside the border, and a label that meets an obstacle slides along its own edge before moving to the next row.
 - The DOT parser needs about half the memory: a 1 MB file with 20 000 edges peaks at 62 MB instead of 118 MB, so it fits PHP's default 128 MB limit.
 - DOT input: a symbol in the graph-name slot (`digraph -> { }`) is a syntax error; `rankdir` or other graph attributes set inside a subgraph no longer change the whole graph; a backslash at the end of a line continues a quoted string; nested clusters fail with "Nested clusters are not supported" instead of being flattened into siblings.
 - `toDot()` keeps double edge strokes: they still export as `style=bold` for Graphviz, plus `phpdag_stroke=double`, which `fromDot()` reads back.

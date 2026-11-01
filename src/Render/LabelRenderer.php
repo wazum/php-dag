@@ -39,31 +39,7 @@ final readonly class LabelRenderer implements ElementRenderer
             $labelWidth = $layoutEdge->edge->label->width();
 
             if (FlowDirection::LeftToRight === $this->flowDirection) {
-                $firstColumn = $layoutEdge->waypoints[0]->column;
-                $lastColumn = $layoutEdge->waypoints[count($layoutEdge->waypoints) - 1]->column;
-                $labelColumn = match ($layoutEdge->edge->label->position) {
-                    LabelPosition::Source => $firstColumn + 1,
-                    LabelPosition::Target => $lastColumn - 1,
-                    LabelPosition::Middle => intdiv($firstColumn + $lastColumn, 2),
-                };
-                $edgeRow = $this->edgeRowAtColumn($layoutEdge->waypoints, $labelColumn);
-                $sourceRow = $layoutEdge->waypoints[0]->row;
-                $preferAbove = $edgeRow < $sourceRow;
-
-                $direction = $preferAbove ? -1 : 1;
-                $canvasHeight = $canvas->height() + 1;
-                $labelRow = $edgeRow + $direction;
-                /** @infection-ignore-all Bound and guard mutations are equivalent: rows outside the canvas always read as free and end the scan at the same row, and the column-0 short-circuit is redundant because column -1 is always empty; verified by running the suite against the mutated conditions */
-                while ($labelRow >= 0 && $labelRow < $canvasHeight && !($this->regionWritable($canvas, $labelRow, $labelColumn, $labelWidth) && (0 === $labelColumn || $this->regionClear($canvas, $labelRow, $labelColumn - 1, 1)) && $this->regionClear($canvas, $labelRow, $labelColumn + $labelWidth, 1))) {
-                    $labelRow += $direction;
-                }
-                if ($labelRow < 0 || $labelRow >= $canvasHeight) {
-                    $labelRow = $edgeRow - $direction;
-                    /** @infection-ignore-all Bound and guard mutations are equivalent: this rescue scan runs downward from edgeRow + 1 (never reaching row 0 or the height bound before a free row appears) and column -1 is always empty; collision behavior is pinned by the fallback* tests and verified by running the suite against the mutated conditions */
-                    while ($labelRow >= 0 && $labelRow < $canvasHeight && !($this->regionWritable($canvas, $labelRow, $labelColumn, $labelWidth) && (0 === $labelColumn || $this->regionClear($canvas, $labelRow, $labelColumn - 1, 1)) && $this->regionClear($canvas, $labelRow, $labelColumn + $labelWidth, 1))) {
-                        $labelRow -= $direction;
-                    }
-                }
+                [$labelRow, $labelColumn] = $this->leftToRightSlot($canvas, $layoutEdge->waypoints, $layoutEdge->edge->label->position, $labelWidth);
                 $canvas->text($labelRow, $labelColumn, $labelText, self::Z_INDEX, $color);
 
                 continue;
@@ -100,6 +76,81 @@ final readonly class LabelRenderer implements ElementRenderer
             [$labelRow, $labelColumn] = $slot ?? $this->slotNearAnchor($canvas, $boxes, $layoutEdge, $anchorRow, $labelWidth);
             $canvas->text($labelRow, $labelColumn, $labelText, self::Z_INDEX, $color);
         }
+    }
+
+    /**
+     * The free row nearest the edge, above it when the edge rises and below it
+     * otherwise, and in that row the free column nearest the label's anchor
+     * along the edge's own horizontal run. Rows past the canvas are always
+     * free, so the downward scan ends.
+     *
+     * @param non-empty-list<Waypoint> $waypoints
+     *
+     * @return array{int, int}
+     */
+    private function leftToRightSlot(Canvas $canvas, array $waypoints, LabelPosition $position, int $width): array
+    {
+        $firstColumn = $waypoints[0]->column;
+        $lastColumn = $waypoints[count($waypoints) - 1]->column;
+        $anchorColumn = match ($position) {
+            LabelPosition::Source => $firstColumn + 1,
+            LabelPosition::Target => $lastColumn - 1,
+            LabelPosition::Middle => intdiv($firstColumn + $lastColumn, 2),
+        };
+        $edgeRow = $this->edgeRowAtColumn($waypoints, $anchorColumn);
+        $columns = $this->columnsNear($anchorColumn, min($firstColumn, $lastColumn), max($firstColumn, $lastColumn) - $width + 1);
+
+        if ($edgeRow < $waypoints[0]->row) {
+            for ($row = $edgeRow - 1; $row >= 0; --$row) {
+                $column = $this->firstClearColumn($canvas, $row, $columns, $width);
+                if (null !== $column) {
+                    return [$row, $column];
+                }
+            }
+        }
+
+        for ($row = $edgeRow + 1;; ++$row) {
+            $column = $this->firstClearColumn($canvas, $row, $columns, $width);
+            if (null !== $column) {
+                return [$row, $column];
+            }
+        }
+    }
+
+    /**
+     * The first column where the label and a blank cell on each side fit.
+     *
+     * @param non-empty-list<int> $columns
+     */
+    private function firstClearColumn(Canvas $canvas, int $row, array $columns, int $width): ?int
+    {
+        foreach ($columns as $column) {
+            if ($this->regionClear($canvas, $row, $column - 1, $width + 2)) {
+                return $column;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The anchor first, then columns alternating left and right of it, within
+     * [low, high].
+     *
+     * @return non-empty-list<int>
+     */
+    private function columnsNear(int $anchor, int $low, int $high): array
+    {
+        $columns = [$anchor];
+        for ($distance = 1; $anchor - $distance >= $low || $anchor + $distance <= $high; ++$distance) {
+            foreach ([$anchor - $distance, $anchor + $distance] as $column) {
+                if ($column >= $low && $column <= $high) {
+                    $columns[] = $column;
+                }
+            }
+        }
+
+        return $columns;
     }
 
     /** @return array<string, array<string, true>> */
@@ -439,17 +490,6 @@ final readonly class LabelRenderer implements ElementRenderer
     {
         /** @infection-ignore-all the separator only keys the (source, target) group; node ids cannot contain it, so altering it leaves the grouping unchanged for any real id */
         return $edge->sourceId()."\0".$edge->targetId();
-    }
-
-    private function regionWritable(Canvas $canvas, int $row, int $startColumn, int $width): bool
-    {
-        for ($column = $startColumn; $column < $startColumn + $width; ++$column) {
-            if (!$canvas->get($row, $column)->wouldAcceptWrite(self::Z_INDEX)) {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     /** @param list<Waypoint> $waypoints */
