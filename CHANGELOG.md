@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The DOT parser needs about half the memory: a 1 MB file with 20 000 edges peaks at 62 MB instead of 118 MB, so it fits PHP's default 128 MB limit.
 - DOT input: a symbol in the graph-name slot (`digraph -> { }`) is a syntax error; `rankdir` or other graph attributes set inside a subgraph no longer change the whole graph; a backslash at the end of a line continues a quoted string; nested clusters fail with "Nested clusters are not supported" instead of being flattened into siblings.
 - `toDot()` keeps double edge strokes: they still export as `style=bold` for Graphviz, plus `phpdag_stroke=double`, which `fromDot()` reads back.
 - A badge wider than a box's content (for example two wide characters) widens the box instead of overwriting its top-left corner.

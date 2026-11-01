@@ -19,8 +19,17 @@ final class DotParser
     private const KIND_IDENTIFIER = 'identifier';
     private const KIND_QUOTED = 'quoted';
 
-    /** @var list<array{kind: string, value: string, offset: int}> */
-    private array $tokens = [];
+    // Tokens as three parallel lists rather than one small array per token, so a
+    // large DOT file fits in memory.
+
+    /** @var list<string> */
+    private array $tokenKinds = [];
+
+    /** @var list<string> */
+    private array $tokenValues = [];
+
+    /** @var list<int> */
+    private array $tokenOffsets = [];
     private int $position = 0;
     private string $source = '';
 
@@ -65,7 +74,7 @@ final class DotParser
     public function parse(string $dot): Graph
     {
         $this->source = $dot;
-        $this->tokens = $this->tokenize($dot);
+        $this->tokenize($dot);
         $this->position = 0;
         $this->nodeDefinitions = [];
         $this->edgeDefinitions = [];
@@ -99,9 +108,8 @@ final class DotParser
         }
         $this->expectSymbol('}');
 
-        $trailing = $this->tokens[$this->position] ?? null;
-        if (null !== $trailing) {
-            throw $this->syntaxError(sprintf('Unexpected token "%s" after end of graph', ControlCharacters::escape($trailing['value'])), $trailing['offset']);
+        if (isset($this->tokenKinds[$this->position])) {
+            throw $this->syntaxError(sprintf('Unexpected token "%s" after end of graph', ControlCharacters::escape($this->tokenValues[$this->position])), $this->tokenOffsets[$this->position]);
         }
 
         return $this->buildGraph();
@@ -203,7 +211,7 @@ final class DotParser
 
         $isCluster = null !== $name && str_starts_with($name, 'cluster');
         if ($isCluster && [] !== $this->clusterStack) {
-            throw $this->syntaxError('Nested clusters are not supported', $this->tokens[$this->position - 1]['offset']);
+            throw $this->syntaxError('Nested clusters are not supported', $this->tokenOffsets[$this->position - 1]);
         }
         if ($isCluster) {
             $this->openCluster($name);
@@ -402,43 +410,39 @@ final class DotParser
     private function expectSymbol(string $value): void
     {
         $token = $this->advance();
-        if (self::KIND_SYMBOL !== $token['kind'] || $token['value'] !== $value) {
-            throw $this->syntaxError(sprintf('Expected "%s", got "%s"', $value, ControlCharacters::escape($token['value'])), $token['offset']);
+        if (self::KIND_SYMBOL !== $this->tokenKinds[$token] || $this->tokenValues[$token] !== $value) {
+            throw $this->syntaxError(sprintf('Expected "%s", got "%s"', $value, ControlCharacters::escape($this->tokenValues[$token])), $this->tokenOffsets[$token]);
         }
     }
 
     private function advanceIdentifier(): string
     {
         $token = $this->advance();
-        if (self::KIND_SYMBOL === $token['kind']) {
-            throw $this->syntaxError(sprintf('Expected identifier, got "%s"', ControlCharacters::escape($token['value'])), $token['offset']);
+        if (self::KIND_SYMBOL === $this->tokenKinds[$token]) {
+            throw $this->syntaxError(sprintf('Expected identifier, got "%s"', ControlCharacters::escape($this->tokenValues[$token])), $this->tokenOffsets[$token]);
         }
 
-        return $token['value'];
+        return $this->tokenValues[$token];
     }
 
-    /** @return array{kind: string, value: string, offset: int} */
-    private function advance(): array
+    /** Index of the next token, consumed. */
+    private function advance(): int
     {
-        if (!isset($this->tokens[$this->position])) {
+        if (!isset($this->tokenKinds[$this->position])) {
             throw $this->syntaxError('Unexpected end of DOT input', strlen($this->source));
         }
 
-        return $this->tokens[$this->position++];
+        return $this->position++;
     }
 
     private function peekKeyword(): ?string
     {
-        $token = $this->tokens[$this->position] ?? null;
-
-        return null !== $token && self::KIND_IDENTIFIER === $token['kind'] ? strtolower($token['value']) : null;
+        return self::KIND_IDENTIFIER === ($this->tokenKinds[$this->position] ?? null) ? strtolower($this->tokenValues[$this->position]) : null;
     }
 
     private function peekIsSymbol(string $value): bool
     {
-        $token = $this->tokens[$this->position] ?? null;
-
-        return null !== $token && self::KIND_SYMBOL === $token['kind'] && $token['value'] === $value;
+        return self::KIND_SYMBOL === ($this->tokenKinds[$this->position] ?? null) && $this->tokenValues[$this->position] === $value;
     }
 
     private function syntaxError(string $reason, int $offset): DotSyntaxException
@@ -451,10 +455,18 @@ final class DotParser
         return new DotSyntaxException($reason, $line, $column);
     }
 
-    /** @return list<array{kind: string, value: string, offset: int}> */
-    private function tokenize(string $dot): array
+    private function addToken(string $kind, string $value, int $offset): void
     {
-        $tokens = [];
+        $this->tokenKinds[] = $kind;
+        $this->tokenValues[] = $value;
+        $this->tokenOffsets[] = $offset;
+    }
+
+    private function tokenize(string $dot): void
+    {
+        $this->tokenKinds = [];
+        $this->tokenValues = [];
+        $this->tokenOffsets = [];
         $length = strlen($dot);
         $offset = 0;
 
@@ -512,7 +524,7 @@ final class DotParser
                     throw $this->syntaxError('Unterminated quoted string in DOT input', $stringStart);
                 }
                 ++$offset;
-                $tokens[] = ['kind' => self::KIND_QUOTED, 'value' => $value, 'offset' => $stringStart];
+                $this->addToken(self::KIND_QUOTED, $value, $stringStart);
                 continue;
             }
 
@@ -532,12 +544,12 @@ final class DotParser
                 } while ($depth > 0);
 
                 $innerHtml = substr($dot, $start + 1, $offset - $start - 2);
-                $tokens[] = ['kind' => self::KIND_QUOTED, 'value' => $this->htmlLabelToText($innerHtml), 'offset' => $start];
+                $this->addToken(self::KIND_QUOTED, $this->htmlLabelToText($innerHtml), $start);
                 continue;
             }
 
             if ('-' === $character && in_array($dot[$offset + 1] ?? '', ['>', '-'], true)) {
-                $tokens[] = ['kind' => self::KIND_SYMBOL, 'value' => '-'.$dot[$offset + 1], 'offset' => $offset];
+                $this->addToken(self::KIND_SYMBOL, '-'.$dot[$offset + 1], $offset);
                 $offset += 2;
                 continue;
             }
@@ -545,19 +557,19 @@ final class DotParser
             // Negative numerals (e.g. margin=-0.1) are valid DOT identifiers; the edge
             // operators "->"/"--" are handled above, so a "-" here starts a number.
             if ('-' === $character && 1 === preg_match('/-(?:\.[0-9]+|[0-9]+(?:\.[0-9]*)?)/A', $dot, $matches, 0, $offset)) {
-                $tokens[] = ['kind' => self::KIND_IDENTIFIER, 'value' => $matches[0], 'offset' => $offset];
+                $this->addToken(self::KIND_IDENTIFIER, $matches[0], $offset);
                 $offset += strlen($matches[0]);
                 continue;
             }
 
             if (1 === preg_match('/[{}\[\];=,:]/', $character)) {
-                $tokens[] = ['kind' => self::KIND_SYMBOL, 'value' => $character, 'offset' => $offset];
+                $this->addToken(self::KIND_SYMBOL, $character, $offset);
                 ++$offset;
                 continue;
             }
 
             if (1 === preg_match('/[A-Za-z0-9_.\x80-\xff]+/A', $dot, $matches, 0, $offset)) {
-                $tokens[] = ['kind' => self::KIND_IDENTIFIER, 'value' => $matches[0], 'offset' => $offset];
+                $this->addToken(self::KIND_IDENTIFIER, $matches[0], $offset);
                 $offset += strlen($matches[0]);
                 continue;
             }
@@ -565,7 +577,5 @@ final class DotParser
             /** @infection-ignore-all dropping the throw never advances $offset, so the tokenizer loops forever on the unexpected character; only the process timeout can detect it */
             throw $this->syntaxError(sprintf('Unexpected character "%s" in DOT input', ControlCharacters::escape($character)), $offset);
         }
-
-        return $tokens;
     }
 }
