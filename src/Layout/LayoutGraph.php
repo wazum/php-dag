@@ -11,6 +11,9 @@ use PhpDag\Graph\Group;
 
 final class LayoutGraph
 {
+    /** Rows/columns between a group's members and its border line. */
+    public const GROUP_RING_WIDTH = 2;
+
     /** @var array<string, LayoutNode> */
     private array $nodes = [];
 
@@ -136,7 +139,7 @@ final class LayoutGraph
 
     public function groupLeftPadding(string $groupId): int
     {
-        return $this->groupLeftPadding[$groupId] ?? 2;
+        return $this->groupLeftPadding[$groupId] ?? self::GROUP_RING_WIDTH;
     }
 
     /** Marks a column span in a layer gap as taken by an edge label, so routing keeps lanes out of it. */

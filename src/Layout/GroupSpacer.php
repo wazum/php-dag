@@ -19,8 +19,7 @@ use PhpDag\Graph\Group;
  */
 final readonly class GroupSpacer implements Processor
 {
-    /** Rows/columns of clearance between a group's members and its border line. */
-    private const MARGIN = 2;
+    private const MARGIN = LayoutGraph::GROUP_RING_WIDTH;
 
     public function __construct(
         private FlowDirection $direction = FlowDirection::TopToBottom,

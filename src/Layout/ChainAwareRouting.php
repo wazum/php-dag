@@ -100,9 +100,8 @@ final readonly class ChainAwareRouting implements EdgeRouting
                 continue;
             }
 
-            // Mirrors GroupRenderer: the border sits two rows above the topmost
-            // member, so the bend must clear it by one more row.
-            $ceiling = $topRow - 3;
+            // The bend must clear the group's top border by one row.
+            $ceiling = $topRow - LayoutGraph::GROUP_RING_WIDTH - 1;
             foreach ($graph->nodeIds() as $nodeId) {
                 if ($graph->getLayoutNode($nodeId)->row !== $topRow) {
                     continue;

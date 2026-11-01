@@ -194,10 +194,9 @@ final readonly class LeftToRightRouting implements EdgeRouting
                 continue;
             }
 
-            // Mirrors GroupRenderer: the border sits two columns left of the
-            // leftmost member, so the bend must clear it by one more column.
-            /** @infection-ignore-all moving the ceiling further left (−4) is reclaimed by max(exitColumn, …): after compaction the source's exit column already lower-bounds the bend, so a looser ceiling renders identically */
-            $ceiling = $leftColumn - 3;
+            // The bend must clear the group's left border by one column.
+            /** @infection-ignore-all moving the ceiling further left is reclaimed by max(exitColumn, …): after compaction the source's exit column already lower-bounds the bend, so a looser ceiling renders identically */
+            $ceiling = $leftColumn - LayoutGraph::GROUP_RING_WIDTH - 1;
             foreach ($graph->nodeIds() as $nodeId) {
                 if ($graph->getLayoutNode($nodeId)->column !== $leftColumn) {
                     continue;
