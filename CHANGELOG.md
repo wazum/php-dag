@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- With ASCII glyphs, a group border no longer cuts the edges that pass through it; the crossing is drawn as `+`.
+- CLI: run without input in a terminal, `php-dag` shows its usage instead of waiting for stdin; a directory path fails with "is not a file" instead of "Empty input".
 - Labels on the outer branches of a fan-out no longer push sibling boxes far apart; room is only made beside the lane where a label is drawn, and parents move with their children.
 - A long edge leaving a lifted fan-out now bends on the bar row instead of crossing the label row.
 - A fan-out label beside a long-edge sibling stays next to its own edge.

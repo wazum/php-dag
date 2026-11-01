@@ -23,9 +23,6 @@ final readonly class GroupRenderer implements ElementRenderer
     private const VERTICAL_PADDING = 1;
     private const HORIZONTAL_PADDING = 1;
 
-    private const VERTICAL_EDGE_CHARS = ['│', '┃', '╎', '┊', '▲', '▼'];
-    private const HORIZONTAL_EDGE_CHARS = ['─', '━', '╌', '┈', '◀', '▶'];
-
     public function __construct(
         private bool $unicodeGlyphs = true,
     ) {
@@ -77,7 +74,7 @@ final readonly class GroupRenderer implements ElementRenderer
         $columns = [];
         /** @infection-ignore-all the bounds only widen/narrow the scan onto the corner cells, which hold box-drawing corners, never edge glyphs, so the detected crossings are unchanged */
         for ($column = $borderLeft + 1; $column < $borderRight; ++$column) {
-            if (in_array($canvas->get($borderTop, $column)->resolvedCharacter(), self::VERTICAL_EDGE_CHARS, true)) {
+            if ($this->runsVertically($canvas->get($borderTop, $column))) {
                 $columns[] = $column;
             }
         }
@@ -109,16 +106,17 @@ final readonly class GroupRenderer implements ElementRenderer
 
     private function horizontalSegment(Canvas $canvas, int $row, int $column, string $borderGlyph, string $crossing): string
     {
-        return in_array($canvas->get($row, $column)->resolvedCharacter(), self::VERTICAL_EDGE_CHARS, true)
-            ? $crossing
-            : $borderGlyph;
+        return $this->runsVertically($canvas->get($row, $column)) ? $crossing : $borderGlyph;
     }
 
     private function verticalSegment(Canvas $canvas, int $row, int $column, string $borderGlyph, string $crossing): string
     {
-        return in_array($canvas->get($row, $column)->resolvedCharacter(), self::HORIZONTAL_EDGE_CHARS, true)
-            ? $crossing
-            : $borderGlyph;
+        return 0 !== ($canvas->get($row, $column)->edgeBits() & (Direction::LEFT | Direction::RIGHT)) ? $crossing : $borderGlyph;
+    }
+
+    private function runsVertically(Cell $cell): bool
+    {
+        return 0 !== ($cell->edgeBits() & (Direction::UP | Direction::DOWN));
     }
 
     /**

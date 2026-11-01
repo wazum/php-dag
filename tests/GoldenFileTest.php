@@ -95,6 +95,7 @@ final class GoldenFileTest extends TestCase
         yield 'cluster_interleaved' => ['cluster_interleaved', self::interleavedCluster(), $topToBottom];
         yield 'cluster_two_groups' => ['cluster_two_groups', self::twoGroups(), $topToBottom];
         yield 'cluster_passing_edge' => ['cluster_passing_edge', self::clusterPassingEdge(), $topToBottom];
+        yield 'ascii_cluster_passing_edge' => ['ascii_cluster_passing_edge', self::clusterPassingEdge(), AsciiDag::builder()->asciiGlyphs()->build()];
         yield 'cluster_evicts_foreign' => ['cluster_evicts_foreign', self::clusterEvictsForeign(), $topToBottom];
         yield 'cluster_stacked' => ['cluster_stacked', self::stackedClusters(), $topToBottom];
         yield 'left_to_right_chain' => ['left_to_right_chain', self::linearChain(), $leftToRight];

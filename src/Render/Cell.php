@@ -76,6 +76,12 @@ final class Cell
         return $this->strokeStyle->glyphs($this->unicodeGlyphs)->junctionFor($this->combinedBits);
     }
 
+    /** Direction bits of the edges drawn through this cell; zero when no edge shows here. */
+    public function edgeBits(): int
+    {
+        return null === $this->strokeStyle ? 0 : $this->combinedBits;
+    }
+
     public function wouldAcceptWrite(int $zIndex): bool
     {
         return $zIndex >= $this->zIndex;
