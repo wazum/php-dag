@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace PhpDag\Dot;
 
+use PhpDag\Graph\ContentAlignment;
 use PhpDag\Graph\ControlCharacters;
 use PhpDag\Graph\Edge;
 use PhpDag\Graph\Graph;
 use PhpDag\Graph\Group;
 use PhpDag\Graph\Label;
 use PhpDag\Graph\Node;
+use PhpDag\Graph\NodeStyle;
 use PhpDag\Layout\FlowDirection;
+use PhpDag\Style\AnsiColor;
+use PhpDag\Style\BorderStyle;
 use PhpDag\Style\EdgeStrokeStyle;
 
 final class DotParser
@@ -331,7 +335,13 @@ final class DotParser
                 explode("\n", $attributes['label'] ?? (string) $id),
             );
             $title = '' === $labelLines[0] ? (string) $id : $labelLines[0];
-            $graph->addNode(new Node((string) $id, $title, array_slice($labelLines, 1)));
+            $graph->addNode(new Node(
+                (string) $id,
+                $title,
+                array_slice($labelLines, 1),
+                $this->nodeStyleFor($attributes),
+                $this->colorFor($attributes['color'] ?? null) ?? $this->colorFor($attributes['fontcolor'] ?? null),
+            ));
         }
 
         $edgeDefinitions = $this->strict ? $this->coalescedStrictEdgeDefinitions() : $this->edgeDefinitions;
@@ -345,6 +355,7 @@ final class DotParser
                     ? EdgeStrokeStyle::Double
                     : $this->edgeStrokeStyleFor($definition['attributes']['style'] ?? null),
                 label: $label,
+                color: $this->colorFor($definition['attributes']['color'] ?? null),
             ));
         }
 
@@ -395,6 +406,57 @@ final class DotParser
         $withLineBreaks = preg_replace('/<br\s*\/?>/i', "\n", $html) ?? $html;
 
         return html_entity_decode(strip_tags($withLineBreaks), ENT_QUOTES | ENT_HTML5);
+    }
+
+    /**
+     * @param array<string, string> $attributes
+     */
+    private function nodeStyleFor(array $attributes): NodeStyle
+    {
+        $borderStyle = $this->borderStyleFor($attributes);
+
+        $alignment = match ($attributes['labeljust'] ?? null) {
+            'l' => ContentAlignment::Left,
+            'r' => ContentAlignment::Right,
+            default => null,
+        };
+        if (null === $alignment) {
+            return new NodeStyle($borderStyle);
+        }
+
+        return new NodeStyle($borderStyle, titleAlignment: $alignment, bodyAlignment: $alignment);
+    }
+
+    /**
+     * @param array<string, string> $attributes
+     */
+    private function borderStyleFor(array $attributes): BorderStyle
+    {
+        $override = match ($attributes[DotExporter::BORDER_ATTRIBUTE] ?? null) {
+            'solid' => BorderStyle::Solid,
+            'none' => BorderStyle::None,
+            default => null,
+        };
+        if (null !== $override) {
+            return $override;
+        }
+
+        $borderStyle = BorderStyle::Rounded;
+        foreach (explode(',', $attributes['style'] ?? '') as $keyword) {
+            $borderStyle = match (trim($keyword)) {
+                'dashed' => BorderStyle::Dashed,
+                'dotted' => BorderStyle::Dotted,
+                'bold' => BorderStyle::Double,
+                default => $borderStyle,
+            };
+        }
+
+        return $borderStyle;
+    }
+
+    private function colorFor(?string $dotColor): ?AnsiColor
+    {
+        return DotExporter::COLORS[strtolower($dotColor ?? '')] ?? null;
     }
 
     private function edgeStrokeStyleFor(?string $dotStyle): EdgeStrokeStyle

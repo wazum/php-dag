@@ -7,13 +7,111 @@ namespace PhpDag\Tests\Dot;
 use InvalidArgumentException;
 use PhpDag\Dot\DotParser;
 use PhpDag\Dot\DotSyntaxException;
+use PhpDag\Graph\ContentAlignment;
 use PhpDag\Layout\FlowDirection;
+use PhpDag\Style\AnsiColor;
+use PhpDag\Style\BorderStyle;
 use PhpDag\Style\EdgeStrokeStyle;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 final class DotParserTest extends TestCase
 {
+    #[Test]
+    #[DataProvider('nodeBorderAttributes')]
+    public function nodeAttributesSetTheBorderStyle(string $attributes, BorderStyle $expected): void
+    {
+        $graph = (new DotParser())->parse(sprintf('digraph { a [%s]; }', $attributes));
+
+        self::assertSame($expected, $graph->getNode('a')->style->borderStyle);
+    }
+
+    /** @return iterable<string, array{string, BorderStyle}> */
+    public static function nodeBorderAttributes(): iterable
+    {
+        yield 'dashed' => ['style=dashed', BorderStyle::Dashed];
+        yield 'dotted' => ['style=dotted', BorderStyle::Dotted];
+        yield 'bold' => ['style=bold', BorderStyle::Double];
+        yield 'last border keyword of a comma list' => ['style="rounded,dashed"', BorderStyle::Dashed];
+        yield 'comma list with spaces' => ['style="filled, dotted"', BorderStyle::Dotted];
+        yield 'beside labeljust' => ['labeljust=l, style=dashed', BorderStyle::Dashed];
+        yield 'phpdag border solid' => ['phpdag_border=solid', BorderStyle::Solid];
+        yield 'phpdag border none' => ['phpdag_border=none', BorderStyle::None];
+        yield 'phpdag border overrides style' => ['style=dashed, phpdag_border=solid', BorderStyle::Solid];
+        yield 'rounded' => ['style=rounded', BorderStyle::Rounded];
+        yield 'invis is ignored' => ['style=invis', BorderStyle::Rounded];
+        yield 'unknown style' => ['style=wavy', BorderStyle::Rounded];
+        yield 'unknown phpdag border' => ['style=dotted, phpdag_border=zigzag', BorderStyle::Dotted];
+    }
+
+    #[Test]
+    #[DataProvider('nodeColorAttributes')]
+    public function nodeAttributesSetTheColor(string $attributes, ?AnsiColor $expected): void
+    {
+        $graph = (new DotParser())->parse(sprintf('digraph { a [%s]; }', $attributes));
+
+        self::assertSame($expected, $graph->getNode('a')->color);
+    }
+
+    /** @return iterable<string, array{string, ?AnsiColor}> */
+    public static function nodeColorAttributes(): iterable
+    {
+        yield 'color' => ['color=red', AnsiColor::Red];
+        yield 'fontcolor' => ['fontcolor=green', AnsiColor::Green];
+        yield 'color wins over fontcolor' => ['color=blue, fontcolor=green', AnsiColor::Blue];
+        yield 'fontcolor when color is unknown' => ['color=chartreuse, fontcolor=green', AnsiColor::Green];
+        yield 'case-insensitive' => ['color=Yellow', AnsiColor::Yellow];
+        yield 'black' => ['color=black', AnsiColor::Black];
+        yield 'magenta' => ['color=magenta', AnsiColor::Magenta];
+        yield 'cyan' => ['color=cyan', AnsiColor::Cyan];
+        yield 'white' => ['color=white', AnsiColor::White];
+        yield 'gray' => ['color=gray', AnsiColor::BrightBlack];
+        yield 'grey' => ['color=grey', AnsiColor::BrightBlack];
+        yield 'unknown name' => ['color=chartreuse', null];
+        yield 'hex value' => ['color="#ff0000"', null];
+        yield 'escape sequence' => ["color=\"\x1b[31m\"", null];
+        yield 'none' => ['label=a', null];
+    }
+
+    #[Test]
+    #[DataProvider('nodeLabelJustifications')]
+    public function labeljustAlignsTheNodeContent(string $attributes, ContentAlignment $title, ContentAlignment $body): void
+    {
+        $style = (new DotParser())->parse(sprintf('digraph { a [%s]; }', $attributes))->getNode('a')->style;
+
+        self::assertSame([$title, $body], [$style->titleAlignment, $style->bodyAlignment]);
+    }
+
+    /** @return iterable<string, array{string, ContentAlignment, ContentAlignment}> */
+    public static function nodeLabelJustifications(): iterable
+    {
+        yield 'left' => ['labeljust=l', ContentAlignment::Left, ContentAlignment::Left];
+        yield 'right' => ['labeljust=r', ContentAlignment::Right, ContentAlignment::Right];
+        yield 'centre keeps the defaults' => ['labeljust=c', ContentAlignment::Center, ContentAlignment::Left];
+        yield 'unknown keeps the defaults' => ['labeljust=sideways', ContentAlignment::Center, ContentAlignment::Left];
+    }
+
+    #[Test]
+    public function nodeDefaultsInsideAClusterStyleOnlyItsMembers(): void
+    {
+        $graph = (new DotParser())->parse('digraph { subgraph cluster_x { node [style=dashed, color=red]; a; } b; }');
+
+        self::assertSame(BorderStyle::Dashed, $graph->getNode('a')->style->borderStyle);
+        self::assertSame(AnsiColor::Red, $graph->getNode('a')->color);
+        self::assertSame(BorderStyle::Rounded, $graph->getNode('b')->style->borderStyle);
+        self::assertNull($graph->getNode('b')->color);
+    }
+
+    #[Test]
+    public function edgeColorAttributeSetsTheEdgeColor(): void
+    {
+        $graph = (new DotParser())->parse('digraph { a -> b [color=red]; b -> c [color="#00ff00"]; }');
+
+        self::assertSame(AnsiColor::Red, $graph->edges()[0]->color);
+        self::assertNull($graph->edges()[1]->color);
+    }
+
     #[Test]
     public function stripsControlCharactersFromNodeLabels(): void
     {

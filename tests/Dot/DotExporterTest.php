@@ -6,11 +6,15 @@ namespace PhpDag\Tests\Dot;
 
 use PhpDag\Dot\DotExporter;
 use PhpDag\Dot\DotParser;
+use PhpDag\Graph\ContentAlignment;
 use PhpDag\Graph\Edge;
 use PhpDag\Graph\Graph;
 use PhpDag\Graph\Group;
 use PhpDag\Graph\Label;
 use PhpDag\Graph\Node;
+use PhpDag\Graph\NodeStyle;
+use PhpDag\Style\AnsiColor;
+use PhpDag\Style\BorderStyle;
 use PhpDag\Style\EdgeStrokeStyle;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -177,6 +181,48 @@ final class DotExporterTest extends TestCase
             EdgeStrokeStyle::cases(),
             array_map(static fn (Edge $edge): EdgeStrokeStyle => $edge->edgeStrokeStyle, $reparsed->edges()),
         );
+    }
+
+    #[Test]
+    public function roundTripKeepsEveryNodeBorderStyle(): void
+    {
+        $graph = new Graph();
+        foreach (BorderStyle::cases() as $borderStyle) {
+            $graph->addNode(new Node($borderStyle->name, 'N', style: new NodeStyle($borderStyle)));
+        }
+
+        $reparsed = (new DotParser())->parse((new DotExporter())->export($graph));
+
+        self::assertSame(
+            BorderStyle::cases(),
+            array_map(static fn (Node $node): BorderStyle => $node->style->borderStyle, array_values($reparsed->nodes())),
+        );
+    }
+
+    #[Test]
+    public function roundTripKeepsLabelJustification(): void
+    {
+        $dot = 'digraph { a [labeljust=l]; b [labeljust=r]; c; }';
+
+        $reparsed = (new DotParser())->parse((new DotExporter())->export((new DotParser())->parse($dot)));
+
+        self::assertSame(ContentAlignment::Left, $reparsed->getNode('a')->style->titleAlignment);
+        self::assertSame(ContentAlignment::Right, $reparsed->getNode('b')->style->titleAlignment);
+        self::assertSame(ContentAlignment::Center, $reparsed->getNode('c')->style->titleAlignment);
+    }
+
+    #[Test]
+    public function roundTripKeepsNodeAndEdgeColors(): void
+    {
+        $dot = 'digraph { a [color=red]; b [fontcolor=grey]; c; a -> b [color=cyan]; b -> c; }';
+
+        $reparsed = (new DotParser())->parse((new DotExporter())->export((new DotParser())->parse($dot)));
+
+        self::assertSame(AnsiColor::Red, $reparsed->getNode('a')->color);
+        self::assertSame(AnsiColor::BrightBlack, $reparsed->getNode('b')->color);
+        self::assertNull($reparsed->getNode('c')->color);
+        self::assertSame(AnsiColor::Cyan, $reparsed->edges()[0]->color);
+        self::assertNull($reparsed->edges()[1]->color);
     }
 
     #[Test]

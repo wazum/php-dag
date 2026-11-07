@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace PhpDag\Tests;
 
+use PhpDag\Style\AnsiColor;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -19,6 +20,19 @@ final class CliTest extends TestCase
         self::assertStringContainsString('│ a │', $result['stdout']);
         self::assertStringContainsString('│ b │', $result['stdout']);
         self::assertSame('', $result['stderr']);
+    }
+
+    #[Test]
+    public function colorsANodeFromItsDotColorOnlyWithAnsiOutput(): void
+    {
+        $dot = 'digraph { a [color=red]; }';
+
+        $ansi = $this->runCli(['--ansi'], $dot);
+        $plain = $this->runCli(['--no-ansi'], $dot);
+
+        self::assertStringContainsString(AnsiColor::Red->escapeCode(), $ansi['stdout']);
+        self::assertStringNotContainsString("\033[", $plain['stdout']);
+        self::assertStringContainsString('│ a │', $plain['stdout']);
     }
 
     #[Test]

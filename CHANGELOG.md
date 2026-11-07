@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The DOT parser reads node `style` (`dashed`, `dotted`, `bold`), node `labeljust` (`l`, `r`), node `color`/`fontcolor` and edge `color`, plus `phpdag_border=solid|none` for borders Graphviz cannot express. `toDot()` writes them back. See the table in `guide/dot-and-cli.md`.
+
 ### Fixed
 
 - A group label longer than its members is no longer cut off: the frame grows to hold it and keeps its members centred, in both flow directions.

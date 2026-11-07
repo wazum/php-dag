@@ -37,16 +37,39 @@ edges. Self-loops are kept and drawn. Control characters in labels are stripped,
 so an untrusted file cannot inject terminal escape sequences.
 `PhpDag\Dot\DotParser::flowDirection()` reports the `rankdir`.
 
+These node and edge attributes set the style:
+
+| DOT attribute | Becomes |
+|---|---|
+| node `style=dashed` / `dotted` | `BorderStyle::Dashed` / `Dotted` |
+| node `style=bold` | `BorderStyle::Double` (`penwidth` is not read) |
+| node `style=rounded`, `invis`, or none | `BorderStyle::Rounded`, the default |
+| node `phpdag_border=solid` / `none` | `BorderStyle::Solid` / `None` (Graphviz has no such style) |
+| node `labeljust=l` / `r` | title and body aligned `ContentAlignment::Left` / `Right` |
+| node `color`, else `fontcolor` | the node's color |
+| edge `color` | the edge's color |
+
+`style` may be a list such as `"rounded,dashed"`; the last border keyword wins.
+`invis` is ignored, because php-dag cannot hide a node, and a border-less box
+leaves edges no row to attach to: they would draw over the text. Ask for
+`phpdag_border=none` to get one anyway. Colors are `black`, `red`, `green`,
+`yellow`, `blue`, `magenta`, `cyan`, `white`, and `gray`/`grey` (bright black),
+in any case. Other names and `#rrggbb` values are ignored. Graphviz reads
+`labeljust` only on graphs and clusters; php-dag reads it on nodes, and any
+other value keeps the default (centred title, left-aligned body). Defaults
+(`node [style=dashed]`), inside clusters too, apply as usual.
+
 It is a pragmatic subset of the DOT grammar, not a full implementation:
 subgraphs used as edge endpoints (`{a b} -> c`), quoted-string concatenation
 with `+`, and nested clusters are not supported.
 
 `toDot()` is a Graphviz **visualization export**, not a full serializer. Node
-titles and multi-line content, edges, edge labels, edge stroke styles, and
-groups (including their ids and labels) round-trip through
-`toDot()`/`fromDot()`. Presentation and layout hints that DOT does not carry —
-ANSI colors, node styles, edge weights, `minLength`, badges, and label
-positions — are dropped. Use it to hand a graph to Graphviz or another DOT
+titles and multi-line content, node border styles, edges, edge labels, edge
+stroke styles, the colors in the table above, and groups (including their ids
+and labels) round-trip through `toDot()`/`fromDot()`. Presentation and layout
+hints that DOT does not carry — bright colors other than gray, a body aligned
+differently from its title, badges, edge weights, `minLength`, and label positions — are
+dropped. Use it to hand a graph to Graphviz or another DOT
 tool, not as a save/load format.
 
 ## The `php-dag` command
