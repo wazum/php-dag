@@ -7,6 +7,7 @@ namespace PhpDag\Tests\Layout;
 use PhpDag\Graph\Graph;
 use PhpDag\Graph\Group;
 use PhpDag\Graph\Node;
+use PhpDag\Layout\FlowDirection;
 use PhpDag\Layout\GroupSpacer;
 use PhpDag\Layout\LayoutGraph;
 use PhpDag\Layout\Processor;
@@ -358,6 +359,26 @@ final class GroupSpacerTest extends TestCase
         (new GroupSpacer())->process($layoutGraph);
 
         self::assertSame(20, $layoutGraph->groupLeftPadding('cluster'));
+    }
+
+    #[Test]
+    public function widensBothSidesEvenlyForALongLabelInLeftToRightFlow(): void
+    {
+        // The ring frame is 9 wide; '╔═ ABCDEFGHIJ ═╗' needs 16: 3 more left, 4 right.
+        $graph = new Graph();
+        $graph->addNode(new Node('member', 'M'));
+        $graph->addNode(new Node('right', 'X'));
+        $graph->addGroup(new Group('cluster', 'ABCDEFGHIJ', ['member']));
+
+        $layoutGraph = LayoutGraph::fromGraph($graph);
+        $this->place($layoutGraph, 'member', row: 10, column: 10);
+        $this->place($layoutGraph, 'right', row: 10, column: 30);
+
+        (new GroupSpacer(FlowDirection::LeftToRight))->process($layoutGraph);
+
+        self::assertSame(5, $layoutGraph->groupLeftPadding('cluster'));
+        self::assertSame([12, 15], $this->position($layoutGraph, 'member'));
+        self::assertSame([12, 41], $this->position($layoutGraph, 'right'));
     }
 
     private function place(LayoutGraph $layoutGraph, string $nodeId, int $row, int $column): void

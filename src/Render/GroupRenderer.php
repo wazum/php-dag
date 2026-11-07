@@ -21,7 +21,6 @@ final readonly class GroupRenderer implements ElementRenderer
 {
     private const Z_INDEX = 6;
     private const VERTICAL_PADDING = 1;
-    private const HORIZONTAL_PADDING = 1;
 
     public function __construct(
         private bool $unicodeGlyphs = true,
@@ -56,7 +55,7 @@ final readonly class GroupRenderer implements ElementRenderer
         $borderTop = $top - self::VERTICAL_PADDING - 1;
         $borderBottom = $bottom + self::VERTICAL_PADDING + 1;
         $borderLeft = $left - $graph->groupLeftPadding($group->id);
-        $borderRight = $right + self::HORIZONTAL_PADDING + 1;
+        $borderRight = $right + $graph->groupRightPadding($group->id);
 
         $topCrossings = $this->topBorderCrossingColumns($canvas, $borderTop, $borderLeft, $borderRight);
         $this->drawBorder($canvas, $borderTop, $borderBottom, $borderLeft, $borderRight);

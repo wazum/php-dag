@@ -144,6 +144,20 @@ final class GroupRendererTest extends TestCase
         self::assertSame('  ╔══╪═══╪ AB ═╗', $topLine);
     }
 
+    #[Test]
+    public function drawsTheRightBorderAtTheReservedRightPadding(): void
+    {
+        $canvas = $this->canvasWithGroup(memberTitle: 'AB', label: 'Label', row: 3, column: 6);
+        $this->lastLayoutGraph->setGroupLeftPadding('cluster', 4);
+        $this->lastLayoutGraph->setGroupRightPadding('cluster', 5);
+
+        (new GroupRenderer())->render($canvas, $this->lastLayoutGraph);
+
+        $topLine = explode("\n", (new PlainTextFormatter())->format($canvas))[0];
+
+        self::assertSame('  ╔═ Label ═════╗', $topLine);
+    }
+
     private function canvasWithGroup(string $memberTitle, string $label, int $row, int $column): Canvas
     {
         $graph = new Graph();

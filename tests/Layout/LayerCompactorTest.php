@@ -6,6 +6,7 @@ namespace PhpDag\Tests\Layout;
 
 use PhpDag\Graph\Edge;
 use PhpDag\Graph\Graph;
+use PhpDag\Graph\Group;
 use PhpDag\Graph\Node;
 use PhpDag\Layout\BrandesKopfPositioning;
 use PhpDag\Layout\FlowDirection;
@@ -220,6 +221,31 @@ final class LayerCompactorTest extends TestCase
         (new LayerCompactor(FlowDirection::LeftToRight))->process($layoutGraph);
 
         self::assertSame($expected, $nodeB->column);
+    }
+
+    #[Test]
+    public function keepsTheWidestRightPaddingOfGroupsEndingInTheSameLayerLeftToRight(): void
+    {
+        $graph = new Graph();
+        $graph->addNode(new Node('A', 'Alpha'));
+        $graph->addNode(new Node('C', 'C'));
+        $graph->addNode(new Node('B', 'Beta'));
+        $graph->addGroup(new Group('wide', 'Wide', ['A']));
+        $graph->addGroup(new Group('narrow', 'Narrow', ['C']));
+
+        $layoutGraph = LayoutGraph::fromGraph($graph);
+        foreach (['A' => 0, 'C' => 0, 'B' => 1] as $nodeId => $layer) {
+            $layoutGraph->getLayoutNode($nodeId)->layer = $layer;
+            $layoutGraph->getLayoutNode($nodeId)->column = 40 * $layer;
+        }
+        $layoutGraph->buildLayerIndex();
+        $layoutGraph->setGroupRightPadding('wide', 10);
+        $layoutGraph->setGroupRightPadding('narrow', 4);
+
+        (new LayerCompactor(FlowDirection::LeftToRight))->process($layoutGraph);
+
+        // Minimum spacing 2, one column for the group border, 8 beyond the ring.
+        self::assertSame($layoutGraph->getLayoutNode('A')->boxWidth() + 11, $layoutGraph->getLayoutNode('B')->column);
     }
 
     /**

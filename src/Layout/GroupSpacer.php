@@ -42,18 +42,14 @@ final readonly class GroupSpacer implements Processor
             }
             [$top, , $left, $right] = $bounds;
 
-            // The label sits on the top border and is only crossed by entry
-            // edges in top-to-bottom flow; in left-to-right flow edges cross the
-            // side borders, so the label never needs the border widened.
-            $leftPadding = FlowDirection::TopToBottom === $this->direction
-                ? $this->labelLeftPadding($graph, $group, $top, $left, $right)
-                : self::MARGIN;
+            [$leftPadding, $rightPadding] = $this->horizontalPadding($graph, $group, $top, $left, $right);
             $graph->setGroupLeftPadding($group->id, $leftPadding);
+            $graph->setGroupRightPadding($group->id, $rightPadding);
 
             // Reserve the right ring before widening the left, so its threshold
             // still refers to the members' pre-shift columns.
             /** @infection-ignore-all the +1 only changes the threshold for columns inside the member band, which the contiguous-block precondition excludes; the following left shift already separates every outside column identically */
-            $this->shiftColumnsAtOrRightOf($graph, $right + 1, self::MARGIN);
+            $this->shiftColumnsAtOrRightOf($graph, $right + 1, $rightPadding);
             $this->shiftColumnsAtOrRightOf($graph, $left, $leftPadding);
         }
 
@@ -93,6 +89,28 @@ final readonly class GroupSpacer implements Processor
             }
             $node->row += $shift;
         }
+    }
+
+    /**
+     * Only top-to-bottom flow has entry edges crossing the label's border. The
+     * frame always fits '╔═ label ═╗', grown evenly so members stay centred.
+     *
+     * @return array{int, int} [left padding, right padding]
+     */
+    private function horizontalPadding(LayoutGraph $graph, Group $group, int $top, int $left, int $right): array
+    {
+        $leftPadding = FlowDirection::TopToBottom === $this->direction
+            ? $this->labelLeftPadding($graph, $group, $top, $left, $right)
+            : self::MARGIN;
+
+        $frameWidth = $right - $left + 1 + $leftPadding + self::MARGIN;
+        $missing = mb_strwidth($group->label) + 6 - $frameWidth;
+        /** @infection-ignore-all at zero missing columns both branches return the same padding */
+        if ($missing <= 0) {
+            return [$leftPadding, self::MARGIN];
+        }
+
+        return [$leftPadding + intdiv($missing, 2), self::MARGIN + $missing - intdiv($missing, 2)];
     }
 
     /**

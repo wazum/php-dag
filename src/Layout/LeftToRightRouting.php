@@ -196,7 +196,7 @@ final readonly class LeftToRightRouting implements EdgeRouting
 
             // The bend must clear the group's left border by one column.
             /** @infection-ignore-all moving the ceiling further left is reclaimed by max(exitColumn, …): after compaction the source's exit column already lower-bounds the bend, so a looser ceiling renders identically */
-            $ceiling = $leftColumn - LayoutGraph::GROUP_RING_WIDTH - 1;
+            $ceiling = $leftColumn - $graph->groupLeftPadding($group->id) - 1;
             foreach ($graph->nodeIds() as $nodeId) {
                 if ($graph->getLayoutNode($nodeId)->column !== $leftColumn) {
                     continue;

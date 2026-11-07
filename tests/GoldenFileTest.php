@@ -131,6 +131,8 @@ final class GoldenFileTest extends TestCase
         yield 'labelled_fan_out_above_a_group' => ['labelled_fan_out_above_a_group', Graph::fromDot('digraph { subgraph cluster_g { label="Archive"; old } review -> approve [label="yes"]; review -> reject [label="no"]; reject -> old }'), $topToBottom];
         yield 'left_to_right_labels_across_group_borders' => ['left_to_right_labels_across_group_borders', Graph::fromDot('digraph { subgraph cluster_build { label="Build"; lint; test } checkout -> lint [label="src"]; lint -> test; test -> deploy [label="ok"] }'), $leftToRight];
         yield 'left_to_right_cluster' => ['left_to_right_cluster', self::clusteredPipeline(), $leftToRight];
+        yield 'left_to_right_long_group_labels' => ['left_to_right_long_group_labels', self::longGroupLabels(), $leftToRight];
+        yield 'left_to_right_long_group_labels_side_by_side' => ['left_to_right_long_group_labels_side_by_side', self::longGroupLabelsSideBySide(), $leftToRight];
         yield 'left_to_right_cluster_evicts' => ['left_to_right_cluster_evicts', self::clusterEvictsForeign(), $leftToRight];
     }
 
@@ -284,6 +286,28 @@ final class GoldenFileTest extends TestCase
             ->addGroup(new Group('grp', 'Cluster', ['a', 'b']));
 
         return $graph;
+    }
+
+    private static function longGroupLabels(): Graph
+    {
+        return Graph::fromDot(<<<'DOT'
+            digraph {
+                subgraph cluster_one { label="Wave 1 · safe now (patch/minor)"; a [label="tiny/yaml"]; }
+                subgraph cluster_two { label="Wave 2 · needs a constraint bump"; b [label="client"]; }
+                a -> b;
+            }
+            DOT);
+    }
+
+    private static function longGroupLabelsSideBySide(): Graph
+    {
+        return Graph::fromDot(<<<'DOT'
+            digraph {
+                subgraph cluster_one { label="A very long label for the left group"; a; }
+                subgraph cluster_two { label="Another long label on the right"; b; }
+                root -> a; root -> b; c -> b;
+            }
+            DOT);
     }
 
     private static function clusteredPipeline(): Graph
