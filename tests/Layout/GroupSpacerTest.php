@@ -236,9 +236,11 @@ final class GroupSpacerTest extends TestCase
         $graph = new Graph();
         $graph->addNode(new Node('member', 'M'));
         $graph->addGroup(new Group('cluster', 'Cluster', ['member']));
+        $this->enterFromAbove($graph, 'member');
 
         $layoutGraph = LayoutGraph::fromGraph($graph);
         $this->place($layoutGraph, 'member', row: 10, column: 10);
+        $this->place($layoutGraph, 'source', row: 2, column: 2);
 
         (new GroupSpacer())->process($layoutGraph);
 
@@ -256,6 +258,7 @@ final class GroupSpacerTest extends TestCase
         $graph = new Graph();
         $graph->addNode(new Node('member', 'M'));
         $graph->addGroup(new Group('cluster', 'AB', ['member']));
+        $this->enterFromAbove($graph, 'member');
 
         $layoutGraph = LayoutGraph::fromGraph($graph);
         $this->place($layoutGraph, 'member', row: 10, column: 10);
@@ -273,6 +276,7 @@ final class GroupSpacerTest extends TestCase
         $graph = new Graph();
         $graph->addNode(new Node('member', 'M'));
         $graph->addGroup(new Group('cluster', 'é', ['member']));
+        $this->enterFromAbove($graph, 'member');
 
         $layoutGraph = LayoutGraph::fromGraph($graph);
         $this->place($layoutGraph, 'member', row: 10, column: 10);
@@ -292,6 +296,7 @@ final class GroupSpacerTest extends TestCase
         $graph = new Graph();
         $graph->addNode(new Node('member', 'M'));
         $graph->addGroup(new Group('cluster', '日', ['member']));
+        $this->enterFromAbove($graph, 'member');
 
         $layoutGraph = LayoutGraph::fromGraph($graph);
         $this->place($layoutGraph, 'member', row: 10, column: 10);
@@ -310,6 +315,7 @@ final class GroupSpacerTest extends TestCase
         $graph->addNode(new Node('m1', 'M'));
         $graph->addNode(new Node('m2', 'M'));
         $graph->addGroup(new Group('cluster', 'Wide', ['m1', 'm2']));
+        $this->enterFromAbove($graph, 'm1', 'm2');
 
         $layoutGraph = LayoutGraph::fromGraph($graph);
         $this->place($layoutGraph, 'm1', row: 0, column: 0);
@@ -330,6 +336,7 @@ final class GroupSpacerTest extends TestCase
         $graph->addNode(new Node('ghost', 'X'));
         $graph->addNode(new Node('member', 'M'));
         $graph->addGroup(new Group('cluster', 'Cluster', ['ghost', 'member']));
+        $this->enterFromAbove($graph, 'member');
 
         $layoutGraph = LayoutGraph::fromGraph($graph);
         $this->place($layoutGraph, 'member', row: 10, column: 10);
@@ -351,6 +358,7 @@ final class GroupSpacerTest extends TestCase
         $graph->addNode(new Node('ml', 'M'));
         $graph->addNode(new Node('mr', 'M'));
         $graph->addGroup(new Group('cluster', str_repeat('A', 18), ['mr', 'ml']));
+        $this->enterFromAbove($graph, 'mr', 'ml');
 
         $layoutGraph = LayoutGraph::fromGraph($graph);
         $this->place($layoutGraph, 'ml', row: 0, column: 0);
@@ -379,6 +387,30 @@ final class GroupSpacerTest extends TestCase
         self::assertSame(5, $layoutGraph->groupLeftPadding('cluster'));
         self::assertSame([12, 15], $this->position($layoutGraph, 'member'));
         self::assertSame([12, 41], $this->position($layoutGraph, 'right'));
+    }
+
+    #[Test]
+    public function widensBothSidesEvenlyWhenNoEdgeEntersTheTopMembers(): void
+    {
+        $graph = new Graph();
+        $graph->addNode(new Node('member', 'M'));
+        $graph->addGroup(new Group('cluster', 'ABCDEFGHIJ', ['member']));
+
+        $layoutGraph = LayoutGraph::fromGraph($graph);
+        $this->place($layoutGraph, 'member', row: 10, column: 10);
+
+        (new GroupSpacer())->process($layoutGraph);
+
+        self::assertSame(5, $layoutGraph->groupLeftPadding('cluster'));
+        self::assertSame(6, $layoutGraph->groupRightPadding('cluster'));
+    }
+
+    private function enterFromAbove(Graph $graph, string ...$memberIds): void
+    {
+        $graph->addNode(new Node('source', 'S'));
+        foreach ($memberIds as $memberId) {
+            $graph->connect('source', $memberId);
+        }
     }
 
     private function place(LayoutGraph $layoutGraph, string $nodeId, int $row, int $column): void

@@ -132,7 +132,9 @@ final class GoldenFileTest extends TestCase
         yield 'left_to_right_labels_across_group_borders' => ['left_to_right_labels_across_group_borders', Graph::fromDot('digraph { subgraph cluster_build { label="Build"; lint; test } checkout -> lint [label="src"]; lint -> test; test -> deploy [label="ok"] }'), $leftToRight];
         yield 'left_to_right_cluster' => ['left_to_right_cluster', self::clusteredPipeline(), $leftToRight];
         yield 'left_to_right_long_group_labels' => ['left_to_right_long_group_labels', self::longGroupLabels(), $leftToRight];
+        yield 'long_group_labels' => ['long_group_labels', self::longGroupLabels(), $topToBottom];
         yield 'left_to_right_long_group_labels_side_by_side' => ['left_to_right_long_group_labels_side_by_side', self::longGroupLabelsSideBySide(), $leftToRight];
+        yield 'long_group_labels_side_by_side' => ['long_group_labels_side_by_side', self::longGroupLabelsSideBySide(), $topToBottom];
         yield 'left_to_right_cluster_evicts' => ['left_to_right_cluster_evicts', self::clusterEvictsForeign(), $leftToRight];
     }
 

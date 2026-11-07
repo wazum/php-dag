@@ -117,8 +117,9 @@ final readonly class GroupSpacer implements Processor
      * Left padding wide enough for the group label to sit on the top border
      * clear of every edge crossing. Defaults to the ring; only widens when the
      * label fits in no crossing-free gap, expanding leftward so it lands before
-     * the leftmost crossing. Edges enter top members at their centers, so those
-     * centers predict the crossings the EdgeRouter will draw.
+     * the leftmost crossing. Edges enter top members at their centers, so the
+     * centers of top members with an incoming edge predict the crossings the
+     * EdgeRouter will draw.
      */
     private function labelLeftPadding(LayoutGraph $graph, Group $group, int $top, int $left, int $right): int
     {
@@ -133,7 +134,7 @@ final readonly class GroupSpacer implements Processor
                 continue;
             }
             $node = $graph->getLayoutNode($nodeId);
-            if ($node->row === $top) {
+            if ($node->row === $top && [] !== $graph->incomingEdges($nodeId)) {
                 $crossings[] = $node->column + intdiv($node->boxWidth(), 2);
             }
         }

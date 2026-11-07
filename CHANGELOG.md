@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - A group label longer than its members is no longer cut off: the frame grows to hold it and keeps its members centred, in both flow directions.
+- In top-to-bottom flow, a group with no edge entering its top members keeps them centred instead of shifting them right.
 
 ## [2.0.0] - 2026-11-01
 
